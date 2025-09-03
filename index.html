@@ -13,7 +13,7 @@
     .item{border:1px solid #ccc;background:white;padding:10px;margin:10px;display:inline-block;vertical-align:top;}
     .topbar{background:#222;color:white;padding:10px;text-align:right;}
     .topbar span{margin-left:15px;}
-    #adminPanel{position:fixed;top:50px;left:50%;transform:translateX(-50%);background:white;padding:20px;border:2px solid black;display:none;z-index:1000;}
+    #adminPanel{position:fixed;top:50px;left:50%;transform:translateX(-50%);background:white;padding:20px;border:2px solid black;display:none;z-index:1000;max-height:90vh;overflow-y:auto;}
     .agotado{background:#eee;color:#888;}
   </style>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
@@ -47,6 +47,7 @@
   <!-- 🔹 Admin Panel -->
   <div id="adminPanel">
     <h2>Admin Panel</h2>
+    <h3>➕ Agregar Item</h3>
     <input id="itemName" placeholder="Nombre item"><br>
     <input id="itemImg" placeholder="URL imagen"><br>
     <input id="itemPrice" placeholder="Precio"><br>
@@ -54,6 +55,17 @@
     <input id="itemStock" placeholder="Stock"><br>
     <button onclick="addItem()">Agregar Item</button>
     <div id="adminItems"></div>
+    <hr>
+    <h3>🎁 Regalar Robux</h3>
+    <input id="giftUser" placeholder="Usuario destino"><br>
+    <input id="giftRobux" placeholder="Cantidad"><br>
+    <button onclick="giftRobux()">Enviar Robux</button>
+    <hr>
+    <h3>🎁 Regalar Item</h3>
+    <input id="giftUserItem" placeholder="Usuario destino"><br>
+    <select id="giftItemSelect"></select><br>
+    <button onclick="giftItem()">Enviar Item</button>
+    <br><br>
     <button onclick="closeAdmin()">Cerrar</button>
   </div>
 
@@ -336,15 +348,45 @@
     const cont=document.getElementById("adminItems");
     cont.innerHTML="";
     const snap=await db.collection("items").get();
+    const select=document.getElementById("giftItemSelect");
+    select.innerHTML="";
     snap.forEach(doc=>{
       const item=doc.data();
       cont.innerHTML+=`<div class="item"><img src="${item.img}" width="50"> ${item.name} (Stock: ${item.stock}) <button onclick="deleteItem('${doc.id}')">X</button></div>`;
+      select.innerHTML+=`<option value="${item.name}">${item.name}</option>`;
     });
   }
   async function deleteItem(id){
     await db.collection("items").doc(id).delete();loadAdmin();
   }
   function closeAdmin(){document.getElementById("adminPanel").style.display="none";}
+
+  // 🎁 Regalar Robux
+  async function giftRobux(){
+    const user=document.getElementById("giftUser").value;
+    const amount=parseInt(document.getElementById("giftRobux").value);
+    if(!user||isNaN(amount)) return alert("Datos inválidos");
+    const ref=db.collection("users").doc(user);
+    const snap=await ref.get();
+    if(!snap.exists) return alert("Usuario no existe");
+    const data=snap.data();
+    await ref.update({robux:data.robux+amount});
+    alert("Robux enviados!");
+  }
+
+  // 🎁 Regalar Item
+  async function giftItem(){
+    const user=document.getElementById("giftUserItem").value;
+    const itemName=document.getElementById("giftItemSelect").value;
+    const ref=db.collection("users").doc(user);
+    const snap=await ref.get();
+    if(!snap.exists) return alert("Usuario no existe");
+    const itemSnap=await db.collection("items").doc(itemName).get();
+    if(!itemSnap.exists) return alert("Item no existe");
+    const item=itemSnap.data();
+    await ref.collection("inventory").doc(item.name).set(item);
+    alert("Item enviado!");
+  }
 
   // 🔹 Atajo con tecla INSERT solo para ROBLOX
   document.addEventListener("keydown",(e)=>{
