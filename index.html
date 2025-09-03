@@ -15,6 +15,8 @@
     #adminPanel { display:none; position:fixed; top:50px; left:50px; background:white; border:2px solid black; padding:20px; z-index:999; }
     .agotado { opacity:0.5; }
     .tag { padding:2px 6px; border-radius:6px; font-size:12px; font-weight:bold; display:inline-block; margin-bottom:4px; }
+    .chatBox { border:1px solid #aaa; padding:10px; height:200px; overflow-y:auto; background:white; }
+    .chatMsg { margin:4px 0; }
   </style>
 </head>
 <body>
@@ -87,6 +89,7 @@
 
   let currentUser=null;
 
+  // 🔹 Registro
   async function register(){
     const u=document.getElementById("username").value;
     const p=document.getElementById("password").value;
@@ -94,12 +97,13 @@
     const ref=db.collection("users").doc(u);
     const doc=await ref.get();
     if(doc.exists) return alert("Usuario ya existe");
-    await ref.set({username:u,password:p,robux:100});
+    await ref.set({username:u,password:p,robux:100,friends:[],requests:[]});
     alert("Registrado!");
     localStorage.setItem("currentUser",u);
     currentUser=u; startApp();
   }
 
+  // 🔹 Login
   async function login(){
     const u=document.getElementById("username").value;
     const p=document.getElementById("password").value;
@@ -185,7 +189,139 @@
     });
   }
 
-  // 🔹 Admin Panel agregar items
+  // 🔹 Friends
+  async function loadFriends(){
+    const cont=document.getElementById("content");
+    cont.innerHTML=`<h2>Friends</h2>
+      <input id="friendSearch" placeholder="Buscar usuario">
+      <button onclick="searchFriend()">Buscar</button>
+      <div id="friendResult"></div>
+      <hr><h3>Solicitudes</h3><div id="reqs"></div>
+      <hr><h3>Tus Amigos</h3><div id="myfriends"></div>`;
+    showRequests(); showFriends();
+  }
+
+  async function searchFriend(){
+    const name=document.getElementById("friendSearch").value;
+    if(!name) return;
+    const ref=db.collection("users").doc(name);
+    const snap=await ref.get();
+    const res=document.getElementById("friendResult");
+    if(!snap.exists){res.innerHTML="<p>No existe</p>"; return;}
+    if(name===currentUser){res.innerHTML="<p>No puedes agregarte</p>"; return;}
+    res.innerHTML=`<p>${name} <button onclick="addFriend('${name}')">Añadir</button></p>`;
+  }
+
+  async function addFriend(name){
+    const ref=db.collection("users").doc(name);
+    const snap=await ref.get();
+    if(!snap.exists) return;
+    const reqs=snap.data().requests||[];
+    if(reqs.includes(currentUser)) return alert("Ya enviado");
+    await ref.update({requests:[...reqs,currentUser]});
+    alert("Solicitud enviada");
+  }
+
+  async function showRequests(){
+    const ref=db.collection("users").doc(currentUser);
+    const snap=await ref.get();
+    const reqs=snap.data().requests||[];
+    const div=document.getElementById("reqs");
+    div.innerHTML="";
+    reqs.forEach(r=>{
+      div.innerHTML+=`<p>${r} 
+        <button onclick="acceptReq('${r}')">Aceptar</button>
+        <button onclick="rejectReq('${r}')">Rechazar</button></p>`;
+    });
+  }
+
+  async function acceptReq(name){
+    const ref=db.collection("users").doc(currentUser);
+    const snap=await ref.get();
+    const data=snap.data();
+    const newReqs=(data.requests||[]).filter(r=>r!==name);
+    const newFriends=[...(data.friends||[]),name];
+    await ref.update({requests:newReqs,friends:newFriends});
+    const fref=db.collection("users").doc(name);
+    const fsnap=await fref.get();
+    const fdata=fsnap.data();
+    await fref.update({friends:[...(fdata.friends||[]),currentUser]});
+    showRequests(); showFriends();
+  }
+
+  async function rejectReq(name){
+    const ref=db.collection("users").doc(currentUser);
+    const snap=await ref.get();
+    const data=snap.data();
+    const newReqs=(data.requests||[]).filter(r=>r!==name);
+    await ref.update({requests:newReqs});
+    showRequests();
+  }
+
+  async function showFriends(){
+    const snap=await db.collection("users").doc(currentUser).get();
+    const friends=snap.data().friends||[];
+    const div=document.getElementById("myfriends");
+    div.innerHTML="";
+    friends.forEach(f=>{
+      div.innerHTML+=`<p>${f} <button onclick="openChat('${f}')">Chatear</button></p>`;
+    });
+  }
+
+  // 🔹 Chat
+  function loadChat(){
+    const cont=document.getElementById("content");
+    cont.innerHTML="<h2>Chat</h2><div id='chatList'></div>";
+    showFriendsChat();
+  }
+
+  async function showFriendsChat(){
+    const snap=await db.collection("users").doc(currentUser).get();
+    const friends=snap.data().friends||[];
+    const div=document.getElementById("chatList");
+    if(!friends.length){div.innerHTML="<p>No tienes amigos</p>"; return;}
+    friends.forEach(f=>{
+      div.innerHTML+=`<p>${f} <button onclick="openChat('${f}')">Chatear</button></p>`;
+    });
+  }
+
+  function openChat(friend){
+    const cont=document.getElementById("content");
+    cont.innerHTML=`<h2>Chat con ${friend}</h2>
+      <div id="chatBox" class="chatBox"></div>
+      <input id="chatMsg" placeholder="Mensaje">
+      <button onclick="sendMsg('${friend}')">Enviar</button>
+      <br><button onclick="loadChat()">⬅ Volver</button>`;
+    listenChat(friend);
+  }
+
+  function chatId(u1,u2){ return [u1,u2].sort().join("_"); }
+
+  function listenChat(friend){
+    const box=document.getElementById("chatBox");
+    db.collection("chats").doc(chatId(currentUser,friend))
+      .collection("msgs").orderBy("time")
+      .onSnapshot(snap=>{
+        box.innerHTML="";
+        snap.forEach(doc=>{
+          const m=doc.data();
+          box.innerHTML+=`<div class="chatMsg"><b>${m.from}:</b> ${m.text}</div>`;
+        });
+        box.scrollTop=box.scrollHeight;
+      });
+  }
+
+  async function sendMsg(friend){
+    const msg=document.getElementById("chatMsg").value;
+    if(!msg) return;
+    const cid=chatId(currentUser,friend);
+    await db.collection("chats").doc(cid).collection("msgs").add({
+      from:currentUser,text:msg,time:Date.now()
+    });
+    document.getElementById("chatMsg").value="";
+  }
+
+  // 🔹 Admin Panel funciones
   async function addItem(){
     const name=document.getElementById("itemName").value;
     const img=document.getElementById("itemImg").value;
@@ -206,7 +342,6 @@
 
   function closeAdmin(){document.getElementById("adminPanel").style.display="none";}
 
-  // 🔹 Insert key solo ROBLOX
   document.addEventListener("keydown",(e)=>{
     if(e.key==="Insert" && currentUser==="ROBLOX"){
       const panel=document.getElementById("adminPanel");
