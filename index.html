@@ -16,6 +16,7 @@
     .btn-buy { background:#28a745; color:white; }
     .btn-delete { background:#dc3545; color:white; }
     .btn-edit { background:#007bff; color:white; }
+    .btn-friend { background:#17a2b8; color:white; }
     #adminPanel { display:none; position:fixed; top:50px; right:50px; background:white; padding:20px; border:2px solid #000; border-radius:8px; width:350px; max-height:500px; overflow-y:auto; }
     #loginArea, #registerArea { margin:50px auto; width:300px; padding:20px; background:#fff; border:1px solid #ccc; border-radius:10px; }
     input { width:90%; padding:8px; margin:5px 0; }
@@ -185,6 +186,132 @@
       loadMarketplace();
     }).catch(err=>{
       alert("❌ " + err);
+    });
+  }
+
+  // 🔹 Profile
+  async function loadProfile(){
+    const content = document.getElementById("content");
+    const snap = await db.collection("users").doc(currentUser).get();
+    const data = snap.data();
+
+    let html = `<h2>Perfil de ${data.username}</h2>`;
+    html += `<p>Robux: 💰 ${data.robux}</p>`;
+    html += `<h3>Inventario:</h3><div id='inventory'></div>`;
+    content.innerHTML = html;
+
+    const invSnap = await db.collection("users").doc(currentUser).collection("inventory").get();
+    const invDiv = document.getElementById("inventory");
+    if(invSnap.empty){ 
+      invDiv.innerHTML = "<p>No tienes items.</p>";
+    } else {
+      invSnap.forEach(doc=>{
+        const item = doc.data();
+        invDiv.innerHTML += `
+          <div class="item">
+            <img src="${item.img}" width="80"><br>
+            <b>${item.name}</b><br>
+            ⭐ ${item.value}
+          </div>
+        `;
+      });
+    }
+  }
+
+  // 🔹 Friends
+  async function loadFriends(){
+    const content = document.getElementById("content");
+    content.innerHTML = `
+      <h2>Amigos</h2>
+      <input id="friendSearch" placeholder="Buscar usuario...">
+      <button onclick="searchUser()">Buscar</button>
+      <div id="searchResult"></div>
+      <h3>Solicitudes</h3>
+      <div id="friendRequests"></div>
+      <h3>Mis Amigos</h3>
+      <div id="myFriends"></div>
+    `;
+    loadRequests();
+    loadMyFriends();
+  }
+
+  async function searchUser(){
+    const name = document.getElementById("friendSearch").value;
+    if(!name) return;
+    const snap = await db.collection("users").doc(name).get();
+    const result = document.getElementById("searchResult");
+    if(!snap.exists){ 
+      result.innerHTML = "<p>Usuario no encontrado</p>";
+    } else {
+      result.innerHTML = `
+        <div class="item">
+          <b>${name}</b><br>
+          <button class="btn btn-friend" onclick="sendRequest('${name}')">Agregar</button>
+        </div>
+      `;
+    }
+  }
+
+  async function sendRequest(toUser){
+    if(toUser === currentUser) return alert("No puedes agregarte a ti mismo");
+    const ref = db.collection("users").doc(toUser);
+    const snap = await ref.get();
+    if(!snap.exists) return alert("Usuario no existe");
+
+    const data = snap.data();
+    if(data.requests.includes(currentUser)) return alert("Ya le enviaste solicitud");
+
+    await ref.update({
+      requests: firebase.firestore.FieldValue.arrayUnion(currentUser)
+    });
+    alert("Solicitud enviada ✅");
+  }
+
+  async function loadRequests(){
+    const snap = await db.collection("users").doc(currentUser).get();
+    const data = snap.data();
+    const cont = document.getElementById("friendRequests");
+    cont.innerHTML = "";
+    if(!data.requests || data.requests.length === 0){
+      cont.innerHTML = "<p>No tienes solicitudes</p>";
+      return;
+    }
+    data.requests.forEach(u=>{
+      cont.innerHTML += `
+        <div class="item">
+          <b>${u}</b><br>
+          <button class="btn btn-friend" onclick="acceptRequest('${u}')">Aceptar</button>
+        </div>
+      `;
+    });
+  }
+
+  async function acceptRequest(fromUser){
+    const meRef = db.collection("users").doc(currentUser);
+    const fromRef = db.collection("users").doc(fromUser);
+
+    await meRef.update({
+      requests: firebase.firestore.FieldValue.arrayRemove(fromUser),
+      friends: firebase.firestore.FieldValue.arrayUnion(fromUser)
+    });
+    await fromRef.update({
+      friends: firebase.firestore.FieldValue.arrayUnion(currentUser)
+    });
+    loadRequests();
+    loadMyFriends();
+  }
+
+  async function loadMyFriends(){
+    const snap = await db.collection("users").doc(currentUser).get();
+    const data = snap.data();
+    const cont = document.getElementById("myFriends");
+    cont.innerHTML = "";
+    if(!data.friends || data.friends.length === 0){
+      cont.innerHTML = "<p>No tienes amigos</p>";
+      return;
+    }
+    data.friends.forEach(u=>{
+      cont.innerHTML += `<div class="item"><b>${u}</b></div>`;
     });
   }
 
