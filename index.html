@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>XD</title>
+  <title>ESP:Z - Home</title>
   <style>
     body{font-family:Arial;margin:0;background:#f0f0f0;}
     #topbar{background:#222;color:#fff;padding:10px;display:flex;justify-content:space-between;align-items:center;}
@@ -74,13 +74,29 @@
     const db=firebase.firestore();
 
     let currentUser=null;
-    let unsubscribeNotifications=null;
 
     // 🔹 Registro
-    async function register(){ /* igual que antes */ ... }
+    async function register(){
+      const user=document.getElementById("regUser").value;
+      const pass=document.getElementById("regPass").value;
+      if(!user||!pass) return alert("Completa todos los campos");
+      const snap=await db.collection("users").doc(user).get();
+      if(snap.exists) return alert("Usuario ya existe");
+      await db.collection("users").doc(user).set({username:user,password:pass,robux:100,friends:[],requests:[]});
+      alert("Registrado correctamente, ahora inicia sesión");
+    }
 
     // 🔹 Login
-    async function login(){ /* igual que antes */ ... }
+    async function login(){
+      const user=document.getElementById("regUser").value;
+      const pass=document.getElementById("regPass").value;
+      const snap=await db.collection("users").doc(user).get();
+      if(!snap.exists) return alert("Usuario no existe");
+      if(snap.data().password!==pass) return alert("Contraseña incorrecta");
+      currentUser=user;
+      localStorage.setItem("currentUser",user);
+      startApp();
+    }
 
     // 🔹 Iniciar app
     async function startApp(){
@@ -96,8 +112,6 @@
       }
       extra.innerHTML+=`<button onclick="logout()">Cerrar Sesión</button>`;
 
-      listenNotifications();
-
       // 🔹 Dar 20 robux cada minuto
       setInterval(async ()=>{
         if(currentUser){
@@ -112,7 +126,66 @@
       }, 60000);
     }
 
-    // ... 🔹 Resto del código igual que antes ...
+    // 🔹 Robux
+    async function updateRobux(){
+      const snap=await db.collection("users").doc(currentUser).get();
+      if(snap.exists) document.getElementById("robux").innerText=snap.data().robux;
+    }
+
+    // 🔹 Logout
+    function logout(){
+      currentUser=null;
+      localStorage.removeItem("currentUser");
+      location.reload();
+    }
+
+    // 🔹 Marketplace (simplificado para ejemplo)
+    async function loadMarket(){
+      document.getElementById("content").innerHTML="<h2>Marketplace</h2><p>Aquí aparecerán los items.</p>";
+    }
+
+    // 🔹 Profile (simplificado)
+    async function loadProfile(){
+      document.getElementById("content").innerHTML="<h2>Profile</h2><p>Tu perfil aquí.</p>";
+    }
+
+    // 🔹 Friends (simplificado)
+    async function loadFriends(){
+      document.getElementById("content").innerHTML="<h2>Friends</h2><p>Tu lista de amigos aquí.</p>";
+    }
+
+    // 🔹 Admin
+    async function addItem(){
+      const name=document.getElementById("itemName").value;
+      const img=document.getElementById("itemImg").value;
+      const price=parseInt(document.getElementById("itemPrice").value);
+      const value=parseInt(document.getElementById("itemValue").value);
+      const stock=parseInt(document.getElementById("itemStock").value);
+      const tagText=document.getElementById("itemTagText").value;
+      const tagColor=document.getElementById("itemTagColor").value;
+      const tagBg=document.getElementById("itemTagBg").value;
+      const addedBy=document.getElementById("itemAddedBy").value||currentUser;
+      const tag=tagText?{text:tagText,color:tagColor||"black",bg:tagBg||"yellow"}:null;
+      await db.collection("items").doc(name).set({name,img,price,value,stock,tag,addedBy});
+      alert("Item agregado correctamente");
+    }
+
+    function closeAdmin(){
+      document.getElementById("adminPanel").style.display="none";
+    }
+
+    document.addEventListener("keydown",(e)=>{
+      if(e.key==="Insert" && currentUser==="ROBLOX"){
+        const panel=document.getElementById("adminPanel");
+        panel.style.display=panel.style.display==="block"?"none":"block";
+      }
+    });
+
+    // 🔹 Mantener login al refrescar
+    window.onload=function(){
+      const u=localStorage.getItem("currentUser");
+      if(u){currentUser=u;startApp();}
+    }
   </script>
 </body>
 </html>
