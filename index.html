@@ -50,7 +50,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, doc, setDoc, getDoc, getDocs, collection, addDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, getDoc, getDocs, collection } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = { 
       apiKey: "AIzaSyBwj_as6pb5Bg81F9Cl9VWTKkekMM9Exfk",
@@ -109,7 +109,7 @@
         extra.innerHTML+=`<button onclick="loadGiveaways()">Giveaways</button>`;
       }
       extra.innerHTML+=`<button onclick="logout()">Cerrar Sesión</button>`;
-      extra.innerHTML+=`<button onclick="loadTrades()">Trades</button>`; // 🔹 Botón Trades
+      extra.innerHTML+=`<button onclick="loadTrades()">Trades</button>`; // ✅ Nuevo botón
     }
 
     // 🔹 Marketplace
@@ -120,148 +120,31 @@
       snap.forEach(docSnap=>{
         const item=docSnap.data();
         cont.innerHTML+=`
-          <div class="item ${item.stock===0?'agotado':''}">
+          <div class="item">
             ${item.tag?`<div class="tag" style="color:${item.tag.color};background:${item.tag.bg};">${item.tag.text}</div>`:""}
             <img src="${item.img}" width="80"><br>
             <b>${item.name}</b><br>
             💰 ${item.price} | ⭐ ${item.value}<br>
             Stock: ${item.stock}<br>
             📌 Subido por: <b>${item.addedBy || "Desconocido"}</b><br>
-            <button onclick="buyItem('${docSnap.id}')">Comprar</button>
+            <button>Comprar</button>
           </div>`;
       });
     }
 
-    // 🔹 Comprar
-    async function buyItem(id){
-      const ref=doc(db,"items",id);
-      const snap=await getDoc(ref);
-      if(!snap.exists()) return;
-      const item=snap.data();
-      const price=Number(item.price)||0;
-      let stock=Number(item.stock)||0;
-      if(stock<=0) return alert("NO HAY STOCK");
-
-      const userRef=doc(db,"users",currentUser);
-      const userSnap=await getDoc(userRef);
-      if(!userSnap.exists()) return;
-      const user=userSnap.data();
-      let robux=Number(user.robux)||0;
-      if(robux<price) return alert("No tienes Robux suficientes");
-
-      await updateDoc(userRef,{robux:robux-price});
-      await updateDoc(ref,{stock:stock-1});
-      await addDoc(collection(userRef,"inventory"),item);
-
-      alert("¡Comprado!");
-      loadMarket();
-    }
-
-    // 🔹 Admin
-    async function addItem(){
-      const name=document.getElementById("itemName").value;
-      const img=document.getElementById("itemImg").value;
-      const price=parseInt(document.getElementById("itemPrice").value);
-      const value=parseInt(document.getElementById("itemValue").value);
-      const stock=parseInt(document.getElementById("itemStock").value);
-      const tag={text:document.getElementById("itemTagText").value,color:document.getElementById("itemTagColor").value,bg:document.getElementById("itemTagBg").value};
-      const addedBy=document.getElementById("itemAddedBy").value || currentUser;
-      await setDoc(doc(db,"items",name),{name,img,price,value,stock,tag,addedBy});
-      alert("Item agregado");
-    }
-
-    function closeAdmin(){document.getElementById("adminPanel").style.display="none";}
-
-    // 🔹 Trades
+    // 🔹 Esqueleto Trades
     async function loadTrades(){
       const usersSnap=await getDocs(collection(db,"users"));
       let html="<h2>Trades</h2>";
-      html+="<h3>Enviar Trade</h3>";
+      html+="<p>Aquí aparecerán todos los jugadores registrados. Podrás enviar ofertas y aceptar intercambios.</p>";
+      html+="<ul>";
       usersSnap.forEach(docSnap=>{
         if(docSnap.id!==currentUser){
-          html+=`${docSnap.id} <button onclick="openTrade('${docSnap.id}')">Tradear</button><br>`;
+          html+=`<li>${docSnap.id} <button>Iniciar Trade</button></li>`;
         }
       });
-      html+="<h3>Trades Recibidos</h3><div id='receivedTrades'></div>";
+      html+="</ul>";
       document.getElementById("content").innerHTML=html;
-      loadReceivedTrades();
-    }
-
-    async function openTrade(target){
-      let html=`<h2>Enviar Trade a ${target}</h2>`;
-      html+=`<h3>Tu inventario (elige lo que ofreces)</h3><div id="tradeInventory"></div>`;
-      html+=`<button onclick="sendTrade('${target}')">Enviar Trade</button>`;
-      document.getElementById("content").innerHTML=html;
-
-      const invSnap=await getDocs(collection(doc(db,"users",currentUser),"inventory"));
-      const invDiv=document.getElementById("tradeInventory");
-      if(invSnap.empty) invDiv.innerHTML="<p>No tienes items.</p>";
-      else {
-        invSnap.forEach(doc=>{
-          const item=doc.data();
-          invDiv.innerHTML+=`
-            <label>
-              <input type="checkbox" class="tradeItem" value="${doc.id}">
-              ${item.name} ⭐${item.value}
-            </label><br>`;
-        });
-      }
-    }
-
-    async function sendTrade(target){
-      const checkboxes=document.querySelectorAll(".tradeItem:checked");
-      if(checkboxes.length===0) return alert("Selecciona al menos un item");
-      let items=[];
-      for(let cb of checkboxes){
-        const snap=await getDoc(doc(db,"users",currentUser,"inventory",cb.value));
-        if(snap.exists()) items.push({...snap.data(),id:cb.value});
-      }
-      await addDoc(collection(db,"users",target,"trades"),{from:currentUser,items,timestamp:Date.now()});
-      alert("Trade enviado a "+target);
-      loadTrades();
-    }
-
-    async function loadReceivedTrades(){
-      const snap=await getDocs(collection(db,"users",currentUser,"trades"));
-      const div=document.getElementById("receivedTrades");
-      if(snap.empty){div.innerHTML="<p>No tienes trades.</p>"; return;}
-      div.innerHTML="";
-      snap.forEach(docSnap=>{
-        const trade=docSnap.data();
-        let itemsHtml="";
-        trade.items.forEach(it=>{
-          itemsHtml+=`${it.name} ⭐${it.value}<br>`;
-        });
-        div.innerHTML+=`
-          <div class="trade">
-            <b>De: ${trade.from}</b><br>
-            Items: <br>${itemsHtml}
-            <button onclick="acceptTrade('${docSnap.id}','${trade.from}',${JSON.stringify(trade.items).replace(/"/g,'&quot;')})">Aceptar</button>
-            <button onclick="rejectTrade('${docSnap.id}')">Rechazar</button>
-          </div><br>`;
-      });
-    }
-
-    async function acceptTrade(tradeId,from,items){
-      const tradeRef=doc(db,"users",currentUser,"trades",tradeId);
-
-      // 🔹 Agregar items al inventario del receptor
-      for(let it of items){
-        await addDoc(collection(doc(db,"users",currentUser),"inventory"),it);
-
-        // 🔹 Eliminar items del inventario del que envió
-        await deleteDoc(doc(db,"users",from,"inventory",it.id));
-      }
-
-      await deleteDoc(tradeRef);
-      alert("Trade aceptado");
-      loadTrades();
-    }
-
-    async function rejectTrade(tradeId){
-      await deleteDoc(doc(db,"users",currentUser,"trades",tradeId));
-      alert("Trade rechazado");
-      loadTrades();
     }
 
     // 🔹 Admin con tecla Insert
