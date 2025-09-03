@@ -14,7 +14,8 @@
     .btn { padding:5px 10px; margin:5px; border:none; cursor:pointer; border-radius:6px; }
     .btn-buy { background:#28a745; color:white; }
     .btn-delete { background:#dc3545; color:white; }
-    #adminPanel { display:none; position:fixed; top:50px; right:50px; background:white; padding:20px; border:2px solid #000; border-radius:8px; width:300px; max-height:500px; overflow-y:auto; }
+    .btn-edit { background:#007bff; color:white; }
+    #adminPanel { display:none; position:fixed; top:50px; right:50px; background:white; padding:20px; border:2px solid #000; border-radius:8px; width:350px; max-height:500px; overflow-y:auto; }
     #loginArea, #registerArea { margin:50px auto; width:300px; padding:20px; background:#fff; border:1px solid #ccc; border-radius:10px; }
     input { width:90%; padding:8px; margin:5px 0; }
   </style>
@@ -60,6 +61,7 @@
   <input id="itemImg" placeholder="URL Imagen"><br>
   <input id="itemPrice" type="number" placeholder="Precio"><br>
   <input id="itemValue" type="number" placeholder="Valor"><br>
+  <input id="itemStock" type="number" placeholder="Stock"><br>
   <button onclick="addItem()">Agregar Item</button>
   <button onclick="closeAdmin()">Cerrar</button>
   <h4>Items actuales</h4>
@@ -78,6 +80,9 @@
     <button onclick="sendMessage()">Enviar</button>
   </div>
 </div>
+
+<!-- Notificación de sonido -->
+<audio id="notifSound" src="https://www.soundjay.com/buttons/beep-07.wav" preload="auto"></audio>
 
 <script>
   // 🔹 Firebase Config
@@ -163,219 +168,39 @@
           <img src="${item.img}" width="100"><br>
           <b>${item.name}</b><br>
           ⭐ ${item.value} - 💰 ${item.price}<br>
-          <button class="btn btn-buy" onclick="buyItem('${doc.id}', ${item.price})">Comprar</button>
+          Stock: ${item.stock}<br>
+          <button class="btn btn-buy" onclick="buyItem('${doc.id}', ${item.price}, ${item.stock})" ${item.stock <= 0 ? "disabled" : ""}>Comprar</button>
         </div>
       `;
     });
   }
 
-  async function buyItem(id, price){
+  async function buyItem(id, price, stock){
+    if(stock <= 0) return alert("❌ NO HAY STOCK");
+
     const userRef = db.collection("users").doc(currentUser);
     const userDoc = await userRef.get();
     let robux = userDoc.data().robux;
+
     if(robux < price) return alert("No tienes Robux suficientes");
-    robux -= price;
-    await userRef.update({ robux });
 
-    const item = await db.collection("items").doc(id).get();
-    await userRef.collection("inventory").add(item.data());
-
-    alert("✅ Comprado!");
-    updateRobux();
-  }
-
-  // 🔹 Profile
-  async function loadProfile(){
-    const snap = await db.collection("users").doc(currentUser).get();
-    const user = snap.data();
-    const content = document.getElementById("content");
-
-    let html = `
-      <h2>Perfil de ${user.username}</h2>
-      <p>Robux: ${user.robux}</p>
-      <h3>🎒 Inventario</h3>
-      <button class="btn btn-delete" onclick="sellAll()">Vender todo</button>
-      <div id="inventory"></div>
-    `;
-    content.innerHTML = html;
-
-    const invSnap = await db.collection("users").doc(currentUser).collection("inventory").get();
-    const invDiv = document.getElementById("inventory");
-
-    if(invSnap.empty){
-      invDiv.innerHTML = "<p>No tienes ítems en tu inventario</p>";
-    } else {
-      let invHtml = "";
-      invSnap.forEach(doc=>{
-        const item = doc.data();
-        invHtml += `
-          <div class="item">
-            <img src="${item.img}" width="100"><br>
-            <b>${item.name}</b><br>
-            ⭐ ${item.value} - 💰 ${item.price}<br>
-            <button class="btn btn-delete" onclick="sellItem('${doc.id}', ${item.price})">Vender</button>
-          </div>
-        `;
-      });
-      invDiv.innerHTML = invHtml;
-    }
-  }
-
-  async function sellItem(id, price){
-    const confirmSell = confirm("¿Quieres vender este ítem por 💰 " + price + " Robux?");
-    if(!confirmSell) return;
-    const userRef = db.collection("users").doc(currentUser);
-    await userRef.collection("inventory").doc(id).delete();
-    const userDoc = await userRef.get();
-    const robux = userDoc.data().robux;
-    await userRef.update({ robux: robux + price });
-    alert("✅ Vendiste el ítem por " + price + " Robux");
-    updateRobux();
-    loadProfile();
-  }
-
-  async function sellAll(){
-    const confirmSell = confirm("¿Quieres vender TODO tu inventario?");
-    if(!confirmSell) return;
-    const userRef = db.collection("users").doc(currentUser);
-    const invSnap = await userRef.collection("inventory").get();
-    let total = 0;
-    invSnap.forEach(doc => total += doc.data().price);
-    const batch = db.batch();
-    invSnap.forEach(doc => batch.delete(doc.ref));
-    await batch.commit();
-    const userDoc = await userRef.get();
-    const robux = userDoc.data().robux;
-    await userRef.update({ robux: robux + total });
-    alert("✅ Vendiste todo por " + total + " Robux");
-    updateRobux();
-    loadProfile();
-  }
-
-  // 🔹 Friends
-  async function loadFriends(){
-    const content = document.getElementById("content");
-    content.innerHTML = `
-      <h2>Amigos</h2>
-      <input id="searchUser" placeholder="Buscar usuario">
-      <button onclick="searchFriend()">Buscar</button>
-      <div id="searchResult"></div>
-      <h3>Solicitudes</h3>
-      <div id="requests"></div>
-      <h3>Amigos</h3>
-      <div id="friendsList"></div>
-    `;
-    loadRequests();
-    loadFriendList();
-  }
-
-  async function searchFriend(){
-    const user = document.getElementById("searchUser").value;
-    if(!user) return;
-    const snap = await db.collection("users").doc(user).get();
-    if(!snap.exists) return alert("Usuario no encontrado");
-    document.getElementById("searchResult").innerHTML = `
-      <p>${user}</p>
-      <button onclick="addFriend('${user}')">Añadir</button>
-    `;
-  }
-
-  async function addFriend(to){
-    const ref = db.collection("users").doc(to);
-    const doc = await ref.get();
-    if(!doc.exists) return;
-    let req = doc.data().requests || [];
-    if(!req.includes(currentUser)){
-      req.push(currentUser);
-      await ref.update({ requests: req });
-      alert("Solicitud enviada");
-    }
-  }
-
-  async function loadRequests(){
-    const snap = await db.collection("users").doc(currentUser).get();
-    const requests = snap.data().requests || [];
-    const div = document.getElementById("requests");
-    div.innerHTML = "";
-    requests.forEach(r=>{
-      div.innerHTML += `
-        <p>${r} <button onclick="acceptFriend('${r}')">Aceptar</button></p>
-      `;
+    // 🔹 Transacción con stock
+    const itemRef = db.collection("items").doc(id);
+    await db.runTransaction(async (t)=>{
+      const doc = await t.get(itemRef);
+      if(!doc.exists) throw "No existe el item";
+      const item = doc.data();
+      if(item.stock <= 0) throw "NO HAY STOCK";
+      t.update(itemRef, { stock: item.stock - 1 });
+      t.update(userRef, { robux: robux - price });
+      t.set(userRef.collection("inventory").doc(), item);
+    }).then(()=>{
+      alert("✅ Comprado!");
+      updateRobux();
+      loadMarketplace();
+    }).catch(err=>{
+      alert("❌ " + err);
     });
-  }
-
-  async function acceptFriend(friend){
-    const userRef = db.collection("users").doc(currentUser);
-    const friendRef = db.collection("users").doc(friend);
-    const uDoc = await userRef.get();
-    const fDoc = await friendRef.get();
-    let myFriends = uDoc.data().friends || [];
-    let fFriends = fDoc.data().friends || [];
-    myFriends.push(friend);
-    fFriends.push(currentUser);
-    await userRef.update({ friends: myFriends, requests: [] });
-    await friendRef.update({ friends: fFriends });
-    loadFriends();
-  }
-
-  async function loadFriendList(){
-    const snap = await db.collection("users").doc(currentUser).get();
-    const friends = snap.data().friends || [];
-    const div = document.getElementById("friendsList");
-    div.innerHTML = "";
-    friends.forEach(f=>{
-      div.innerHTML += `
-        <p>${f} 
-          <button onclick="openChat('${f}')">Chatear</button>
-        </p>`;
-    });
-  }
-
-  // 🔹 Chat
-  let currentChatFriend = null;
-  let unsubscribeChat = null;
-
-  function getChatId(user1, user2){
-    return [user1, user2].sort().join("_");
-  }
-
-  async function openChat(friend){
-    currentChatFriend = friend;
-    document.getElementById("chatWith").innerText = "Chat con " + friend;
-    document.getElementById("chatPanel").style.display = "block";
-    loadChatMessages(friend);
-  }
-
-  function closeChat(){
-    document.getElementById("chatPanel").style.display = "none";
-    if(unsubscribeChat) unsubscribeChat();
-  }
-
-  function loadChatMessages(friend){
-    const chatId = getChatId(currentUser, friend);
-    const chatRef = db.collection("chats").doc(chatId).collection("messages").orderBy("timestamp");
-    unsubscribeChat = chatRef.onSnapshot(snapshot=>{
-      const chatDiv = document.getElementById("chatMessages");
-      chatDiv.innerHTML = "";
-      snapshot.forEach(doc=>{
-        const msg = doc.data();
-        const align = msg.from === currentUser ? "right" : "left";
-        chatDiv.innerHTML += `<div style="text-align:${align}; margin:5px;"><b>${msg.from}:</b> ${msg.text}</div>`;
-      });
-      chatDiv.scrollTop = chatDiv.scrollHeight;
-    });
-  }
-
-  async function sendMessage(){
-    const text = document.getElementById("chatInput").value;
-    if(!text) return;
-    const chatId = getChatId(currentUser, currentChatFriend);
-    await db.collection("chats").doc(chatId).collection("messages").add({
-      from: currentUser,
-      text: text,
-      timestamp: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    document.getElementById("chatInput").value = "";
   }
 
   // 🔹 Admin
@@ -384,8 +209,11 @@
     const img = document.getElementById("itemImg").value;
     const price = parseInt(document.getElementById("itemPrice").value);
     const value = parseInt(document.getElementById("itemValue").value);
-    if(!name || !img || !price) return;
-    await db.collection("items").add({ name, img, price, value });
+    const stock = parseInt(document.getElementById("itemStock").value);
+
+    if(!name || !img || !price || !stock) return alert("Completa todos los campos");
+
+    await db.collection("items").add({ name, img, price, value, stock });
     loadAdminItems();
     alert("✅ Item agregado");
   }
@@ -405,10 +233,21 @@
           <img src="${item.img}" width="80"><br>
           <b>${item.name}</b><br>
           💰 ${item.price} ⭐ ${item.value}<br>
+          Stock: ${item.stock}<br>
+          <button class="btn btn-edit" onclick="editStock('${doc.id}', ${item.stock})">Editar Stock</button>
           <button class="btn btn-delete" onclick="deleteItem('${doc.id}')">Eliminar</button>
         </div>
       `;
     });
+  }
+
+  async function editStock(id, currentStock){
+    const nuevoStock = prompt("Nuevo stock:", currentStock);
+    if(nuevoStock !== null){
+      await db.collection("items").doc(id).update({ stock: parseInt(nuevoStock) });
+      loadAdminItems();
+      loadMarketplace();
+    }
   }
 
   async function deleteItem(id){
