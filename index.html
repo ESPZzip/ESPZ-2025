@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Roblox Revival</title>
+  <title>test</title>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"></script>
   <style>
@@ -20,7 +20,7 @@
     .item { background:#2f3136; padding:12px; border-radius:10px; margin:10px; text-align:center; display:inline-block; width:160px; transition:.2s; }
     .item:hover { transform:scale(1.05); }
     .item img { width:100px; height:100px; object-fit:cover; border-radius:8px; }
-    .btn { padding:8px 12px; border:none; border-radius:6px; margin-top:8px; cursor:pointer; font-weight:bold; }
+    .btn { padding:6px 10px; border:none; border-radius:6px; margin:3px; cursor:pointer; font-weight:bold; font-size:14px; }
     .btn-buy { background:#4cc9f0; }
     .btn-delete { background:#ff4d4d; color:#fff; }
     #adminPanel { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#111; padding:20px; border:2px solid white; border-radius:10px; z-index:100; }
@@ -100,23 +100,15 @@
   async function register(){
     const user = document.getElementById("regUsername").value.trim();
     const pass = document.getElementById("regPassword").value;
-
     if(!user || !pass) return alert("Completa los campos");
 
     const ref = db.collection("users").doc(user);
     const docSnap = await ref.get();
-
-    if(docSnap.exists){
-      alert("⚠️ El usuario ya existe");
-      return;
-    }
+    if(docSnap.exists) return alert("⚠️ El usuario ya existe");
 
     await ref.set({ username:user, password:pass, robux:500 });
-
     currentUser = user;
     localStorage.setItem("loggedUser", user);
-
-    alert("✅ Bienvenido " + user);
     await loadUserData();
   }
 
@@ -124,20 +116,15 @@
   async function login(){
     const user = document.getElementById("logUsername").value.trim();
     const pass = document.getElementById("logPassword").value;
-
     if(!user || !pass) return alert("Completa los campos");
 
     const ref = db.collection("users").doc(user);
     const docSnap = await ref.get();
-
     if(!docSnap.exists) return alert("❌ Usuario no encontrado");
-
     if(docSnap.data().password !== pass) return alert("❌ Contraseña incorrecta");
 
     currentUser = user;
     localStorage.setItem("loggedUser", user);
-
-    alert("✅ Bienvenido de nuevo " + user);
     await loadUserData();
   }
 
@@ -161,13 +148,11 @@
   async function loadUserData(){
     const userDoc = await db.collection("users").doc(currentUser).get();
     if(!userDoc.exists) return;
-
     document.getElementById("robuxDisplay").innerText = userDoc.data().robux;
     document.getElementById("robuxBox").style.display="flex";
     document.getElementById("logoutBtn").style.display="inline-block";
     document.getElementById("authSection").style.display="none";
     document.getElementById("mainSection").style.display="block";
-
     loadMarketplace();
   }
 
@@ -207,10 +192,8 @@
     let robux=doc.data().robux;
     if(robux<price) return alert("No tienes suficiente Robux!");
     await ref.update({ robux: robux-price });
-
     const item=await db.collection("items").doc(itemId).get();
     await ref.collection("inventory").add({ ...item.data(), boughtAt:new Date() });
-
     loadUserData();
     alert("¡Comprado!");
   }
@@ -241,9 +224,79 @@
     document.getElementById("inv").innerHTML=html || "<p>Inventario vacío</p>";
   }
 
-  // 🔹 Amigos (placeholder)
-  function loadFriends(){
-    document.getElementById("contentArea").innerHTML="<h2>Amigos (en construcción)</h2>";
+  // 🔹 Amigos
+  async function loadFriends(){
+    const content=document.getElementById("contentArea");
+    content.innerHTML=`
+      <h2>Amigos</h2>
+      <input id="friendSearch" placeholder="Buscar usuario...">
+      <button class="btn" style="background:#4cc9f0;" onclick="searchFriend()">Buscar</button>
+      <div id="friendResult"></div>
+      <h3>Solicitudes</h3><div id="requests"></div>
+      <h3>Mis Amigos</h3><div id="friendsList"></div>
+    `;
+    loadRequests();
+    loadFriendList();
+  }
+
+  // Buscar usuario
+  async function searchFriend(){
+    const name=document.getElementById("friendSearch").value.trim();
+    if(!name) return;
+    if(name===currentUser) return alert("No puedes agregarte a ti mismo");
+    const ref=db.collection("users").doc(name);
+    const doc=await ref.get();
+    if(!doc.exists) return document.getElementById("friendResult").innerHTML="❌ Usuario no encontrado";
+    document.getElementById("friendResult").innerHTML=`
+      <p>👤 ${name}</p>
+      <button class="btn" style="background:#00ff9d;" onclick="sendRequest('${name}')">Enviar solicitud</button>
+    `;
+  }
+
+  // Enviar solicitud
+  async function sendRequest(toUser){
+    await db.collection("users").doc(toUser).collection("requests").doc(currentUser).set({ from:currentUser });
+    alert("✅ Solicitud enviada a " + toUser);
+  }
+
+  // Cargar solicitudes
+  function loadRequests(){
+    const cont=document.getElementById("requests");
+    db.collection("users").doc(currentUser).collection("requests").onSnapshot(snap=>{
+      let html="";
+      snap.forEach(doc=>{
+        html+=`
+          <p>${doc.id} quiere ser tu amigo 
+            <button class="btn" style="background:#00ff9d;" onclick="acceptRequest('${doc.id}')">Aceptar</button>
+            <button class="btn btn-delete" onclick="rejectRequest('${doc.id}')">Rechazar</button>
+          </p>`;
+      });
+      cont.innerHTML=html || "No tienes solicitudes";
+    });
+  }
+
+  // Aceptar solicitud
+  async function acceptRequest(user){
+    await db.collection("users").doc(currentUser).collection("friends").doc(user).set({ username:user });
+    await db.collection("users").doc(user).collection("friends").doc(currentUser).set({ username:currentUser });
+    await db.collection("users").doc(currentUser).collection("requests").doc(user).delete();
+  }
+
+  // Rechazar solicitud
+  async function rejectRequest(user){
+    await db.collection("users").doc(currentUser).collection("requests").doc(user).delete();
+  }
+
+  // Lista de amigos
+  function loadFriendList(){
+    const cont=document.getElementById("friendsList");
+    db.collection("users").doc(currentUser).collection("friends").onSnapshot(snap=>{
+      let html="";
+      snap.forEach(doc=>{
+        html+=`<p>👥 ${doc.id}</p>`;
+      });
+      cont.innerHTML=html || "No tienes amigos aún";
+    });
   }
 
   // 🔹 Admin secreto
