@@ -3,65 +3,56 @@
 <head>
   <title>ESP:Z - Home</title>
   <style>
-    body{font-family:Arial;margin:0;background:#f0f0f0;}
-    #topbar{background:#222;color:#fff;padding:10px;display:flex;justify-content:space-between;align-items:center;}
-    #sidebar{width:150px;background:#ddd;height:100vh;float:left;padding-top:20px;}
-    #sidebar button{display:block;width:100%;margin:5px 0;padding:10px;border:none;cursor:pointer;background:#bbb;}
-    #content{margin-left:150px;padding:20px;}
-    .item{background:#fff;padding:10px;margin:10px;display:inline-block;border-radius:10px;box-shadow:0 0 5px #aaa;}
-    .tag{padding:2px 6px;border-radius:6px;font-size:12px;display:inline-block;margin-bottom:4px;}
-    .agotado{opacity:0.5;}
-    #adminPanel{display:none;position:fixed;top:50px;left:50%;transform:translateX(-50%);background:#fff;padding:20px;border:2px solid #000;z-index:1000;max-height:80vh;overflow:auto;}
+    body {font-family: Arial; display:flex; margin:0;}
+    #sidebar {width:200px; background:#222; color:white; padding:10px;}
+    #sidebar button {width:100%; margin:5px 0; padding:8px; border:none; border-radius:8px; cursor:pointer;}
+    #content {flex:1; padding:20px;}
+    .item {border:1px solid #ccc; padding:10px; margin:5px; display:inline-block; width:150px; vertical-align:top;}
+    .tag {font-size:12px; padding:2px 4px; border-radius:4px; display:inline-block; margin-bottom:5px;}
+    #adminPanel {display:none; position:fixed; top:10%; left:25%; right:25%; background:#fff; padding:20px; border:2px solid #000; z-index:1000;}
   </style>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"></script>
 </head>
 <body>
-  <div id="topbar">
-    <div>ESP:Z HOME</div>
-    <div id="robuxDisplay" style="display:none;">💰 <span id="robux">0</span></div>
-  </div>
-
   <div id="sidebar">
+    <h3>Menu</h3>
     <button onclick="loadMarket()">Marketplace</button>
     <button onclick="loadProfile()">Profile</button>
     <button onclick="loadFriends()">Friends</button>
+    <button onclick="loadChat()">Chat</button>
     <div id="extraButtons"></div>
   </div>
 
   <div id="content">
-    <h2>Bienvenido</h2>
-    <div id="authBox">
-      <input id="regUser" placeholder="Usuario"><br>
-      <input id="regPass" type="password" placeholder="Contraseña"><br>
-      <button onclick="register()">Registrar</button>
-      <button onclick="login()">Login</button>
-    </div>
+    <h2>Login / Register</h2>
+    <input id="username" placeholder="Usuario"><br>
+    <input id="password" type="password" placeholder="Contraseña"><br>
+    <button onclick="register()">Registrar</button>
+    <button onclick="login()">Login</button>
   </div>
 
   <!-- 🔹 Admin Panel -->
   <div id="adminPanel">
     <h2>Admin Panel</h2>
-    <h3>➕ Agregar Item</h3>
-    <input id="itemName" placeholder="Nombre item"><br>
-    <input id="itemImg" placeholder="URL imagen"><br>
+    <input id="itemName" placeholder="Nombre del Item"><br>
+    <input id="itemImg" placeholder="URL Imagen"><br>
     <input id="itemPrice" placeholder="Precio"><br>
     <input id="itemValue" placeholder="Valor"><br>
     <input id="itemStock" placeholder="Stock"><br>
-    <input id="itemTagText" placeholder="Tag texto (opcional)"><br>
-    <input id="itemTagColor" placeholder="Color tag"><br>
-    <input id="itemTagBg" placeholder="Fondo tag"><br>
-    <input id="itemAddedBy" placeholder="Subido por (usuario)"><br>
+    <input id="itemTagText" placeholder="Tag (opcional)"><br>
+    <input id="itemTagColor" placeholder="Color Tag (ej: red)"><br>
+    <input id="itemTagBg" placeholder="Fondo Tag (ej: yellow)"><br>
+    <input id="itemAddedBy" placeholder="Subido por"><br>
     <button onclick="addItem()">Agregar Item</button>
-    <div id="adminItems"></div>
-    <br>
     <button onclick="closeAdmin()">Cerrar</button>
   </div>
 
-  <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, doc, setDoc, getDoc, getDocs, collection, addDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-  <script>
-    const firebaseConfig = {
+    const firebaseConfig = { 
       apiKey: "AIzaSyBwj_as6pb5Bg81F9Cl9VWTKkekMM9Exfk",
       authDomain: "pekora-forum.firebaseapp.com",
       projectId: "pekora-forum",
@@ -70,65 +61,64 @@
       appId: "1:161910967859:web:6a28cecaae74b9b7e9dd46",
       measurementId: "G-BPBTW5KBRK"
     };
-    firebase.initializeApp(firebaseConfig);
-    const db=firebase.firestore();
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
 
     let currentUser=null;
-    let unsubscribeNotifications=null;
 
-    // 🔹 Registro
+    // 🔹 Registrar
     async function register(){
-      const user=document.getElementById("regUser").value;
-      const pass=document.getElementById("regPass").value;
-      if(!user||!pass)return alert("Completa todo");
-      const snap=await db.collection("users").doc(user).get();
-      if(snap.exists) return alert("Usuario ya existe");
-      await db.collection("users").doc(user).set({username:user,password:pass,robux:100,friends:[],requests:[]});
-      alert("Registrado, ahora inicia sesión");
+      const u=document.getElementById("username").value;
+      const p=document.getElementById("password").value;
+      if(!u||!p) return alert("Completa los campos");
+      const ref=doc(db,"users",u);
+      const snap=await getDoc(ref);
+      if(snap.exists()){alert("Usuario ya existe");return;}
+      await setDoc(ref,{username:u,password:p,robux:100});
+      localStorage.setItem("currentUser",u);
+      currentUser=u;
+      startApp();
     }
 
     // 🔹 Login
     async function login(){
-      const user=document.getElementById("regUser").value;
-      const pass=document.getElementById("regPass").value;
-      const snap=await db.collection("users").doc(user).get();
-      if(!snap.exists) return alert("No existe");
-      if(snap.data().password!==pass) return alert("Contraseña incorrecta");
-      currentUser=user;
-      localStorage.setItem("currentUser",user);
+      const u=document.getElementById("username").value;
+      const p=document.getElementById("password").value;
+      const ref=doc(db,"users",u);
+      const snap=await getDoc(ref);
+      if(!snap.exists()){alert("No existe");return;}
+      if(snap.data().password!==p){alert("Contraseña incorrecta");return;}
+      localStorage.setItem("currentUser",u);
+      currentUser=u;
       startApp();
     }
 
-    // 🔹 Iniciar app
-    async function startApp(){
-      document.getElementById("robuxDisplay").style.display="block";
-      document.getElementById("authBox").style.display="none";
-      loadMarket();
-      updateRobux();
+    // 🔹 Cerrar sesión
+    function logout(){
+      localStorage.removeItem("currentUser");
+      location.reload();
+    }
 
+    // 🔹 Inicializar app
+    function startApp(){
+      document.getElementById("content").innerHTML="<h2>Bienvenido "+currentUser+"</h2>";
       const extra=document.getElementById("extraButtons");
       extra.innerHTML="";
       if(currentUser==="ROBLOX"){
         extra.innerHTML+=`<button onclick="loadGiveaways()">Giveaways</button>`;
       }
       extra.innerHTML+=`<button onclick="logout()">Cerrar Sesión</button>`;
-
-      listenNotifications(); // 👈 Escuchar notificaciones en tiempo real
-    }
-
-    // 🔹 Robux
-    async function updateRobux(){
-      const snap=await db.collection("users").doc(currentUser).get();
-      document.getElementById("robux").innerText=snap.data().robux;
+      extra.innerHTML+=`<button onclick="loadTrades()">Trades</button>`; // 🔹 Nuevo botón
     }
 
     // 🔹 Marketplace
     async function loadMarket(){
-      const snap=await db.collection("items").get();
+      const snap=await getDocs(collection(db,"items"));
       const cont=document.getElementById("content");
       cont.innerHTML="<h2>Marketplace</h2>";
-      snap.forEach(doc=>{
-        const item=doc.data();
+      snap.forEach(docSnap=>{
+        const item=docSnap.data();
         cont.innerHTML+=`
           <div class="item ${item.stock===0?'agotado':''}">
             ${item.tag?`<div class="tag" style="color:${item.tag.color};background:${item.tag.bg};">${item.tag.text}</div>`:""}
@@ -136,251 +126,138 @@
             <b>${item.name}</b><br>
             💰 ${item.price} | ⭐ ${item.value}<br>
             Stock: ${item.stock}<br>
-            📌 Subido por: <b>${item.addedBy||"Desconocido"}</b><br>
-            <button onclick="buyItem('${doc.id}')">Comprar</button>
+            📌 Subido por: <b>${item.addedBy || "Desconocido"}</b><br>
+            <button onclick="buyItem('${docSnap.id}')">Comprar</button>
           </div>`;
       });
     }
 
+    // 🔹 Comprar
     async function buyItem(id){
-      const snap=await db.collection("items").doc(id).get();
-      if(!snap.exists)return;
+      const ref=doc(db,"items",id);
+      const snap=await getDoc(ref);
+      if(!snap.exists()) return;
       const item=snap.data();
       if(item.stock<=0) return alert("NO HAY STOCK");
-      const uref=db.collection("users").doc(currentUser);
-      const usnap=await uref.get();
-      if(usnap.data().robux<item.price) return alert("No tienes suficiente Robux");
-      await uref.update({robux:usnap.data().robux-item.price});
-      await db.collection("users").doc(currentUser).collection("inventory").add(item);
-      await db.collection("items").doc(id).update({stock:item.stock-1});
-      updateRobux(); loadMarket();
+      const userRef=doc(db,"users",currentUser);
+      const user=await getDoc(userRef);
+      if(user.data().robux<item.price) return alert("No tienes Robux");
+      await updateDoc(userRef,{robux:user.data().robux-item.price});
+      await updateDoc(ref,{stock:item.stock-1});
+      await addDoc(collection(userRef,"inventory"),item);
+      alert("Comprado!");
+      loadMarket();
     }
 
-    // 🔹 Perfil
-    async function loadProfile(){
-      const cont=document.getElementById("content");
-      cont.innerHTML="<h2>Perfil</h2><div id='inv'></div>";
-      const invSnap=await db.collection("users").doc(currentUser).collection("inventory").get();
-      const invDiv=document.getElementById("inv");
-      if(invSnap.empty) invDiv.innerHTML="<p>Sin items</p>";
-      else invSnap.forEach(doc=>{
-        const item=doc.data();
-        invDiv.innerHTML+=`
-          <div class="item">
-            ${item.tag?`<div class="tag" style="color:${item.tag.color};background:${item.tag.bg};">${item.tag.text}</div>`:""}
-            <img src="${item.img}" width="80"><br>
-            <b>${item.name}</b><br>
-            ⭐ ${item.value}<br>
-            📌 Subido por: <b>${item.addedBy||"Desconocido"}</b>
-          </div>`;
-      });
-    }
-
-    // 🔹 Friends
-    async function loadFriends(){
-      const snap=await db.collection("users").doc(currentUser).get();
-      const data=snap.data();
-      let html="<h2>Friends</h2>";
-      html+=`<input id="searchFriend" placeholder="Buscar usuario"><button onclick="searchFriend()">Buscar</button><br><br>`;
-      html+="<h3>Solicitudes</h3>";
-      if(data.requests.length===0) html+="<p>Sin solicitudes</p>";
-      else data.requests.forEach(r=>{
-        html+=`${r} <button onclick="acceptFriend('${r}')">Aceptar</button><br>`;
-      });
-      html+="<h3>Tus amigos</h3>";
-      if(data.friends.length===0) html+="<p>No tienes amigos</p>";
-      else data.friends.forEach(f=>{
-        html+=`${f} <button onclick="viewFriendInventory('${f}')">Ver inventario</button><br>`;
-      });
-      document.getElementById("content").innerHTML=html;
-    }
-
-    async function searchFriend(){
-      const name=document.getElementById("searchFriend").value;
-      if(!name) return;
-      const snap=await db.collection("users").doc(name).get();
-      if(!snap.exists) return alert("No encontrado");
-      document.getElementById("content").innerHTML+=`<p>${name} <button onclick="addFriend('${name}')">Añadir</button></p>`;
-    }
-
-    async function addFriend(name){
-      if(name===currentUser)return;
-      const uref=db.collection("users").doc(name);
-      const usnap=await uref.get();
-      if(!usnap.exists)return alert("No existe");
-      await uref.update({requests:firebase.firestore.FieldValue.arrayUnion(currentUser)});
-      alert("Solicitud enviada");
-    }
-
-    async function acceptFriend(name){
-      const uref=db.collection("users").doc(currentUser);
-      await uref.update({
-        requests:firebase.firestore.FieldValue.arrayRemove(name),
-        friends:firebase.firestore.FieldValue.arrayUnion(name)
-      });
-      await db.collection("users").doc(name).update({
-        friends:firebase.firestore.FieldValue.arrayUnion(currentUser)
-      });
-      loadFriends();
-    }
-
-    // 🔹 Ver inventario de un amigo + enviar Robux
-    async function viewFriendInventory(user){
-      const content=document.getElementById("content");
-      const snap=await db.collection("users").doc(user).get();
-      if(!snap.exists){content.innerHTML="<p>No encontrado</p>";return;}
-      const data=snap.data();
-      let html=`<h2>Inventario de ${data.username}</h2>`;
-      html+=`<p>Robux: 💰 ${data.robux}</p>`;
-      html+=`<h3>Enviar Robux</h3>
-             <input id="giftAmount" placeholder="Cantidad">
-             <button onclick="giftRobux('${user}')">Enviar</button><br><br>`;
-      html+=`<h3>Items:</h3><div id='friendInventory'></div>`;
-      content.innerHTML=html;
-
-      const invSnap=await db.collection("users").doc(user).collection("inventory").get();
-      const invDiv=document.getElementById("friendInventory");
-      if(invSnap.empty) invDiv.innerHTML="<p>No tiene items.</p>";
-      else {
-        invSnap.forEach(doc=>{
-          const item=doc.data();
-          invDiv.innerHTML+=`
-            <div class="item">
-              ${item.tag?`<div class="tag" style="color:${item.tag.color};background:${item.tag.bg};">${item.tag.text}</div>`:""}
-              <img src="${item.img}" width="80"><br>
-              <b>${item.name}</b><br>
-              ⭐ ${item.value}<br>
-              📌 Subido por: <b>${item.addedBy||"Desconocido"}</b>
-            </div>`;
-        });
-      }
-    }
-
-    // 🔹 Enviar Robux a amigo (con notificación)
-    async function giftRobux(user){
-      const amount=parseInt(document.getElementById("giftAmount").value);
-      if(!amount || amount<=0) return alert("Cantidad inválida");
-      const uref=db.collection("users").doc(currentUser);
-      const usnap=await uref.get();
-      if(usnap.data().robux<amount) return alert("No tienes suficientes Robux");
-      await uref.update({robux:usnap.data().robux-amount});
-      const fsnap=await db.collection("users").doc(user).get();
-      await db.collection("users").doc(user).update({robux:fsnap.data().robux+amount});
-
-      // 🔔 Crear notificación en Firestore
-      await db.collection("users").doc(user).collection("notifications").add({
-        message:`${currentUser} te envió ${amount} Robux`,
-        timestamp:Date.now()
-      });
-
-      alert("Robux enviados!");
-      updateRobux();
-      viewFriendInventory(user);
-    }
-
-    // 🔹 Escuchar notificaciones en tiempo real
-    function listenNotifications(){
-      if(unsubscribeNotifications) unsubscribeNotifications();
-      unsubscribeNotifications=db.collection("users").doc(currentUser)
-        .collection("notifications")
-        .orderBy("timestamp","desc")
-        .onSnapshot((snap)=>{
-          snap.docChanges().forEach(change=>{
-            if(change.type==="added"){
-              const data=change.doc.data();
-              alert("🔔 " + data.message);
-              // Opcional: borrar notificación después de mostrarla
-              db.collection("users").doc(currentUser).collection("notifications").doc(change.doc.id).delete();
-            }
-          });
-        });
-    }
-
-    // 🔹 Giveaways (solo admin)
-    function loadGiveaways(){
-      document.getElementById("content").innerHTML=`
-        <h2>Giveaways</h2>
-        <input id="giveUser" placeholder="Usuario destino"><br>
-        <input id="giveAmount" placeholder="Cantidad de Robux"><br>
-        <button onclick="sendGiveaway()">Enviar</button>
-      `;
-    }
-
-    async function sendGiveaway(){
-      const user=document.getElementById("giveUser").value;
-      const amount=parseInt(document.getElementById("giveAmount").value);
-      if(!user||!amount) return;
-      const snap=await db.collection("users").doc(user).get();
-      if(!snap.exists)return alert("No existe ese usuario");
-      await db.collection("users").doc(user).update({robux:snap.data().robux+amount});
-
-      // 🔔 Notificación para el ganador
-      await db.collection("users").doc(user).collection("notifications").add({
-        message:`Has recibido ${amount} Robux de un Giveaway 🎉`,
-        timestamp:Date.now()
-      });
-
-      alert("Enviado!");
-    }
-
-    // 🔹 Logout
-    function logout(){
-      currentUser=null;
-      if(unsubscribeNotifications) unsubscribeNotifications();
-      localStorage.removeItem("currentUser");
-      location.reload();
-    }
-
-    // 🔹 Admin Panel funciones
+    // 🔹 Admin
     async function addItem(){
       const name=document.getElementById("itemName").value;
       const img=document.getElementById("itemImg").value;
       const price=parseInt(document.getElementById("itemPrice").value);
       const value=parseInt(document.getElementById("itemValue").value);
       const stock=parseInt(document.getElementById("itemStock").value);
-      const tagText=document.getElementById("itemTagText").value;
-      const tagColor=document.getElementById("itemTagColor").value;
-      const tagBg=document.getElementById("itemTagBg").value;
-      const addedBy=document.getElementById("itemAddedBy").value||currentUser;
-      const tag=tagText?{text:tagText,color:tagColor||"black",bg:tagBg||"yellow"}:null;
-      await db.collection("items").doc(name).set({name,img,price,value,stock,tag,addedBy});
+      const tag={text:document.getElementById("itemTagText").value,color:document.getElementById("itemTagColor").value,bg:document.getElementById("itemTagBg").value};
+      const addedBy=document.getElementById("itemAddedBy").value || currentUser;
+      await setDoc(doc(db,"items",name),{name,img,price,value,stock,tag,addedBy});
       alert("Item agregado");
-      loadAdmin();
-    }
-
-    async function loadAdmin(){
-      const panel=document.getElementById("adminPanel");
-      panel.style.display="block";
-      const cont=document.getElementById("adminItems");
-      cont.innerHTML="<h3>Items actuales:</h3>";
-      const snap=await db.collection("items").get();
-      snap.forEach(doc=>{
-        const item=doc.data();
-        cont.innerHTML+=`
-          <div class="item">
-            ${item.tag?`<div class="tag" style="color:${item.tag.color};background:${item.tag.bg};">${item.tag.text}</div>`:""}
-            <img src="${item.img}" width="60"> <b>${item.name}</b>
-            💰${item.price} | ⭐${item.value} | Stock: ${item.stock}<br>
-            📌 Subido por: <b>${item.addedBy||"Desconocido"}</b><br>
-            <button onclick="deleteItem('${doc.id}')">❌ Eliminar</button>
-          </div>`;
-      });
-    }
-
-    async function deleteItem(id){
-      if(confirm("¿Seguro que quieres eliminar este item?")){
-        await db.collection("items").doc(id).delete();
-        alert("Item eliminado");
-        loadAdmin(); loadMarket();
-      }
     }
 
     function closeAdmin(){document.getElementById("adminPanel").style.display="none";}
 
-    document.addEventListener("keydown",(e)=>{
+    // 🔹 Trades
+    async function loadTrades(){
+      const usersSnap=await getDocs(collection(db,"users"));
+      let html="<h2>Trades</h2>";
+      html+="<h3>Enviar Trade</h3>";
+      usersSnap.forEach(docSnap=>{
+        if(docSnap.id!==currentUser){
+          html+=`${docSnap.id} <button onclick="openTrade('${docSnap.id}')">Tradear</button><br>`;
+        }
+      });
+
+      html+="<h3>Trades Recibidos</h3><div id='receivedTrades'></div>";
+      document.getElementById("content").innerHTML=html;
+      loadReceivedTrades();
+    }
+
+    async function openTrade(target){
+      let html=`<h2>Enviar Trade a ${target}</h2>`;
+      html+=`<h3>Tu inventario (elige lo que ofreces)</h3><div id="tradeInventory"></div>`;
+      html+=`<button onclick="sendTrade('${target}')">Enviar Trade</button>`;
+      document.getElementById("content").innerHTML=html;
+
+      const invSnap=await getDocs(collection(doc(db,"users",currentUser),"inventory"));
+      const invDiv=document.getElementById("tradeInventory");
+      if(invSnap.empty) invDiv.innerHTML="<p>No tienes items.</p>";
+      else {
+        invSnap.forEach(doc=>{
+          const item=doc.data();
+          invDiv.innerHTML+=`
+            <label>
+              <input type="checkbox" class="tradeItem" value="${doc.id}">
+              ${item.name} ⭐${item.value}
+            </label><br>`;
+        });
+      }
+    }
+
+    async function sendTrade(target){
+      const checkboxes=document.querySelectorAll(".tradeItem:checked");
+      if(checkboxes.length===0) return alert("Selecciona al menos un item");
+      let items=[];
+      for(let cb of checkboxes){
+        const snap=await getDoc(doc(db,"users",currentUser,"inventory",cb.value));
+        if(snap.exists()) items.push(snap.data());
+      }
+      await addDoc(collection(db,"users",target,"trades"),{from:currentUser,items,timestamp:Date.now()});
+      alert("Trade enviado a "+target);
+      loadTrades();
+    }
+
+    async function loadReceivedTrades(){
+      const snap=await getDocs(collection(db,"users",currentUser,"trades"));
+      const div=document.getElementById("receivedTrades");
+      if(snap.empty){div.innerHTML="<p>No tienes trades.</p>"; return;}
+      snap.forEach(docSnap=>{
+        const trade=docSnap.data();
+        let itemsHtml="";
+        trade.items.forEach(it=>{
+          itemsHtml+=`${it.name} ⭐${it.value}<br>`;
+        });
+        div.innerHTML+=`
+          <div class="trade">
+            <b>De: ${trade.from}</b><br>
+            Items: <br>${itemsHtml}
+            <button onclick="acceptTrade('${docSnap.id}','${trade.from}')">Aceptar</button>
+            <button onclick="rejectTrade('${docSnap.id}')">Rechazar</button>
+          </div><br>`;
+      });
+    }
+
+    async function acceptTrade(tradeId,from){
+      const ref=doc(db,"users",currentUser,"trades",tradeId);
+      const snap=await getDoc(ref);
+      if(!snap.exists()) return;
+      const trade=snap.data();
+      for(let it of trade.items){
+        await addDoc(collection(doc(db,"users",currentUser),"inventory"),it);
+      }
+      await deleteDoc(ref);
+      alert("Trade aceptado");
+      loadTrades();
+    }
+
+    async function rejectTrade(tradeId){
+      await deleteDoc(doc(db,"users",currentUser,"trades",tradeId));
+      alert("Trade rechazado");
+      loadTrades();
+    }
+
+    // 🔹 Admin con tecla Insert
+    document.addEventListener("keydown",function(e){
       if(e.key==="Insert" && currentUser==="ROBLOX"){
         const panel=document.getElementById("adminPanel");
-        if(panel.style.display==="block"){closeAdmin();} else {loadAdmin();}
+        panel.style.display=panel.style.display==="block"?"none":"block";
       }
     });
 
