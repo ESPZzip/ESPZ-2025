@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Roblox Revival Firebase</title>
+  <title>ESP:Z - Home</title>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"></script>
   <style>
@@ -27,7 +27,7 @@
 
 <header>
   <div>🔥 Roblox Revival</div>
-  <div class="robux">💰 <span id="robuxDisplay">0</span> R$</div>
+  <div class="robux" id="robuxBox" style="display:none;">💰 <span id="robuxDisplay">0</span> R$</div>
 </header>
 
 <div id="authSection">
@@ -86,7 +86,7 @@
 
   // 🔹 Registrar usuario
   async function register(){
-    const user = document.getElementById("regUsername").value;
+    const user = document.getElementById("regUsername").value.trim();
     const pass = document.getElementById("regPassword").value;
     if(!user || !pass) return alert("Completa los campos");
     const ref = db.collection("users").doc(user);
@@ -98,8 +98,9 @@
 
   // 🔹 Login usuario
   async function login(){
-    const user = document.getElementById("logUsername").value;
+    const user = document.getElementById("logUsername").value.trim();
     const pass = document.getElementById("logPassword").value;
+    if(!user || !pass) return alert("Completa los campos");
     const ref = db.collection("users").doc(user);
     const docSnap = await ref.get();
     if(!docSnap.exists) return alert("Usuario no encontrado");
@@ -121,7 +122,9 @@
   // 🔹 Cargar datos del usuario
   async function loadUserData(){
     const userDoc = await db.collection("users").doc(currentUser).get();
+    if(!userDoc.exists) return;
     document.getElementById("robuxDisplay").innerText = userDoc.data().robux;
+    document.getElementById("robuxBox").style.display="flex";
     document.getElementById("authSection").style.display="none";
     document.getElementById("mainSection").style.display="block";
   }
@@ -162,8 +165,16 @@
     let robux=doc.data().robux;
     if(robux<price) return alert("No tienes suficiente Robux!");
     await ref.update({ robux: robux-price });
-    // Guardar en inventario
-    await ref.collection("inventory").add({ itemId, boughtAt:new Date() });
+    // Guardar en inventario con copia de los datos del item
+    const item=await db.collection("items").doc(itemId).get();
+    await ref.collection("inventory").add({ 
+      itemId, 
+      name:item.data().name, 
+      img:item.data().img, 
+      price:item.data().price, 
+      value:item.data().value, 
+      boughtAt:new Date() 
+    });
     loadUserData();
     alert("¡Comprado!");
   }
@@ -173,7 +184,7 @@
     await db.collection("items").doc(id).delete();
   }
 
-  // 🔹 Perfil
+  // 🔹 Perfil con inventario bonito
   async function loadProfile(){
     const content=document.getElementById("contentArea");
     const userDoc=await db.collection("users").doc(currentUser).get();
@@ -181,9 +192,16 @@
     const inv=await db.collection("users").doc(currentUser).collection("inventory").get();
     let html="";
     for(let doc of inv.docs){
-      html+=`<div>Item ID: ${doc.data().itemId}</div>`;
+      const item=doc.data();
+      html+=`
+        <div class="item">
+          <img src="${item.img}"><br>
+          <b>${item.name}</b><br>
+          💰 ${item.price} R$<br>
+          Valor: ${item.value}
+        </div>`;
     }
-    document.getElementById("inv").innerHTML=html;
+    document.getElementById("inv").innerHTML=html || "<p>Inventario vacío</p>";
   }
 
   // 🔹 Amigos (placeholder)
