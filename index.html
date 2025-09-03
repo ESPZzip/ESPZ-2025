@@ -30,6 +30,7 @@
   <div class="robux" id="robuxBox" style="display:none;">💰 <span id="robuxDisplay">0</span> R$</div>
 </header>
 
+<!-- 🔹 Sección de login/registro -->
 <div id="authSection">
   <div class="card">
     <h2>Registrarse</h2>
@@ -43,6 +44,7 @@
   </div>
 </div>
 
+<!-- 🔹 Sección principal -->
 <div id="mainSection" style="display:none;">
   <div class="layout">
     <div class="sidebar">
@@ -57,7 +59,7 @@
   </div>
 </div>
 
-<!-- Panel Admin -->
+<!-- 🔹 Panel Admin -->
 <div id="adminPanel">
   <h3>Admin Panel</h3>
   <input id="itemName" placeholder="Nombre"><br>
@@ -69,7 +71,7 @@
 </div>
 
 <script>
-  // 🔥 Tu config de Firebase
+  // 🔥 Config Firebase
   const firebaseConfig = { 
     apiKey: "AIzaSyBwj_as6pb5Bg81F9Cl9VWTKkekMM9Exfk",
     authDomain: "pekora-forum.firebaseapp.com",
@@ -88,14 +90,25 @@
   async function register(){
     const user = document.getElementById("regUsername").value.trim();
     const pass = document.getElementById("regPassword").value;
+
     if(!user || !pass) return alert("Completa los campos");
+
     const ref = db.collection("users").doc(user);
     const docSnap = await ref.get();
-    if(docSnap.exists) return alert("Usuario ya existe!");
+
+    if(docSnap.exists){
+      alert("⚠️ El usuario ya existe, elige otro nombre");
+      return;
+    }
+
+    // Crear usuario
     await ref.set({ username:user, password:pass, robux:500 });
-    // 🔥 Auto login después de registrar
+
+    // Guardar sesión y loguear
     currentUser = user;
     localStorage.setItem("loggedUser", user);
+
+    alert("✅ Registro exitoso, bienvenido " + user);
     await loadUserData();
   }
 
@@ -103,13 +116,26 @@
   async function login(){
     const user = document.getElementById("logUsername").value.trim();
     const pass = document.getElementById("logPassword").value;
+
     if(!user || !pass) return alert("Completa los campos");
+
     const ref = db.collection("users").doc(user);
     const docSnap = await ref.get();
-    if(!docSnap.exists) return alert("Usuario no encontrado");
-    if(docSnap.data().password !== pass) return alert("Contraseña incorrecta");
+
+    if(!docSnap.exists){
+      alert("❌ Usuario no encontrado");
+      return;
+    }
+
+    if(docSnap.data().password !== pass){
+      alert("❌ Contraseña incorrecta");
+      return;
+    }
+
     currentUser = user;
     localStorage.setItem("loggedUser", user);
+
+    alert("✅ Bienvenido de nuevo " + user);
     await loadUserData();
   }
 
@@ -122,19 +148,20 @@
     }
   }
 
-  // 🔹 Cargar datos del usuario
+  // 🔹 Cargar datos usuario
   async function loadUserData(){
     const userDoc = await db.collection("users").doc(currentUser).get();
     if(!userDoc.exists) return;
+
     document.getElementById("robuxDisplay").innerText = userDoc.data().robux;
     document.getElementById("robuxBox").style.display="flex";
     document.getElementById("authSection").style.display="none";
     document.getElementById("mainSection").style.display="block";
-    // Por defecto mostrar Marketplace
-    loadMarketplace();
+
+    loadMarketplace(); // default
   }
 
-  // 🔹 Mostrar secciones
+  // 🔹 Secciones
   function showSection(section){
     if(section==="marketplace") loadMarketplace();
     else if(section==="profile") loadProfile();
@@ -156,7 +183,7 @@
           💰 ${d.price} R$<br>
           Valor: ${d.value}<br>
           <button onclick="buyItem('${doc.id}',${d.price})">Comprar</button>
-          <button class="delete-btn" onclick="deleteItem('${doc.id}')">Eliminar</button>
+          ${currentUser==="admin" ? `<button class="delete-btn" onclick="deleteItem('${doc.id}')">Eliminar</button>` : ""}
         </div>`;
       });
       document.getElementById("market").innerHTML=html;
@@ -170,7 +197,7 @@
     let robux=doc.data().robux;
     if(robux<price) return alert("No tienes suficiente Robux!");
     await ref.update({ robux: robux-price });
-    // Guardar en inventario con copia de los datos del item
+
     const item=await db.collection("items").doc(itemId).get();
     await ref.collection("inventory").add({ 
       itemId, 
@@ -180,16 +207,18 @@
       value:item.data().value, 
       boughtAt:new Date() 
     });
+
     loadUserData();
     alert("¡Comprado!");
   }
 
-  // 🔹 Eliminar item (admin)
+  // 🔹 Eliminar item (solo admin)
   async function deleteItem(id){
+    if(currentUser!=="admin") return alert("Solo el admin puede borrar items!");
     await db.collection("items").doc(id).delete();
   }
 
-  // 🔹 Perfil con inventario bonito
+  // 🔹 Perfil
   async function loadProfile(){
     const content=document.getElementById("contentArea");
     const userDoc=await db.collection("users").doc(currentUser).get();
@@ -214,7 +243,7 @@
     document.getElementById("contentArea").innerHTML="<h2>Amigos (en construcción)</h2>";
   }
 
-  // 🔹 Admin Panel
+  // 🔹 Admin Panel secreto
   document.addEventListener("keydown",e=>{
     if(e.key==="Insert"){
       const pass=prompt("Contraseña admin:");
