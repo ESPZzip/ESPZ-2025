@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>ESP:Z - Home</title>
+  <title>Roblox Revival</title>
   <style>
     body{font-family:Arial;margin:0;background:#f0f0f0;}
     #topbar{background:#222;color:#fff;padding:10px;display:flex;justify-content:space-between;align-items:center;}
@@ -219,6 +219,53 @@
         friends:firebase.firestore.FieldValue.arrayUnion(currentUser)
       });
       loadFriends();
+    }
+
+    // 🔹 Ver inventario de un amigo + enviar Robux
+    async function viewFriendInventory(user){
+      const content=document.getElementById("content");
+      const snap=await db.collection("users").doc(user).get();
+      if(!snap.exists){content.innerHTML="<p>No encontrado</p>";return;}
+      const data=snap.data();
+      let html=`<h2>Inventario de ${data.username}</h2>`;
+      html+=`<p>Robux: 💰 ${data.robux}</p>`;
+      html+=`<h3>Enviar Robux</h3>
+             <input id="giftAmount" placeholder="Cantidad">
+             <button onclick="giftRobux('${user}')">Enviar</button><br><br>`;
+      html+=`<h3>Items:</h3><div id='friendInventory'></div>`;
+      content.innerHTML=html;
+
+      const invSnap=await db.collection("users").doc(user).collection("inventory").get();
+      const invDiv=document.getElementById("friendInventory");
+      if(invSnap.empty) invDiv.innerHTML="<p>No tiene items.</p>";
+      else {
+        invSnap.forEach(doc=>{
+          const item=doc.data();
+          invDiv.innerHTML+=`
+            <div class="item">
+              ${item.tag?`<div class="tag" style="color:${item.tag.color};background:${item.tag.bg};">${item.tag.text}</div>`:""}
+              <img src="${item.img}" width="80"><br>
+              <b>${item.name}</b><br>
+              ⭐ ${item.value}<br>
+              📌 Subido por: <b>${item.addedBy||"Desconocido"}</b>
+            </div>`;
+        });
+      }
+    }
+
+    // 🔹 Enviar Robux a amigo
+    async function giftRobux(user){
+      const amount=parseInt(document.getElementById("giftAmount").value);
+      if(!amount || amount<=0) return alert("Cantidad inválida");
+      const uref=db.collection("users").doc(currentUser);
+      const usnap=await uref.get();
+      if(usnap.data().robux<amount) return alert("No tienes suficientes Robux");
+      await uref.update({robux:usnap.data().robux-amount});
+      const fsnap=await db.collection("users").doc(user).get();
+      await db.collection("users").doc(user).update({robux:fsnap.data().robux+amount});
+      alert("Robux enviados!");
+      updateRobux();
+      viewFriendInventory(user);
     }
 
     // 🔹 Giveaways (solo admin)
