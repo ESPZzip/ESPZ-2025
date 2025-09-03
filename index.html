@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>ESP:Z - Home</title>
+  <title>Roblox Revival</title>
   <style>
     body {font-family: Arial; display:flex; margin:0;}
     #sidebar {width:200px; background:#222; color:white; padding:10px;}
@@ -109,7 +109,7 @@
         extra.innerHTML+=`<button onclick="loadGiveaways()">Giveaways</button>`;
       }
       extra.innerHTML+=`<button onclick="logout()">Cerrar Sesión</button>`;
-      extra.innerHTML+=`<button onclick="loadTrades()">Trades</button>`; // 🔹 Nuevo botón
+      extra.innerHTML+=`<button onclick="loadTrades()">Trades</button>`; // 🔹 Botón Trades
     }
 
     // 🔹 Marketplace
@@ -138,14 +138,22 @@
       const snap=await getDoc(ref);
       if(!snap.exists()) return;
       const item=snap.data();
-      if(item.stock<=0) return alert("NO HAY STOCK");
+      const price=Number(item.price)||0;
+      let stock=Number(item.stock)||0;
+      if(stock<=0) return alert("NO HAY STOCK");
+
       const userRef=doc(db,"users",currentUser);
-      const user=await getDoc(userRef);
-      if(user.data().robux<item.price) return alert("No tienes Robux");
-      await updateDoc(userRef,{robux:user.data().robux-item.price});
-      await updateDoc(ref,{stock:item.stock-1});
+      const userSnap=await getDoc(userRef);
+      if(!userSnap.exists()) return;
+      const user=userSnap.data();
+      let robux=Number(user.robux)||0;
+      if(robux<price) return alert("No tienes Robux suficientes");
+
+      await updateDoc(userRef,{robux:robux-price});
+      await updateDoc(ref,{stock:stock-1});
       await addDoc(collection(userRef,"inventory"),item);
-      alert("Comprado!");
+
+      alert("¡Comprado!");
       loadMarket();
     }
 
@@ -174,7 +182,6 @@
           html+=`${docSnap.id} <button onclick="openTrade('${docSnap.id}')">Tradear</button><br>`;
         }
       });
-
       html+="<h3>Trades Recibidos</h3><div id='receivedTrades'></div>";
       document.getElementById("content").innerHTML=html;
       loadReceivedTrades();
@@ -207,7 +214,7 @@
       let items=[];
       for(let cb of checkboxes){
         const snap=await getDoc(doc(db,"users",currentUser,"inventory",cb.value));
-        if(snap.exists()) items.push(snap.data());
+        if(snap.exists()) items.push({...snap.data(),id:cb.value});
       }
       await addDoc(collection(db,"users",target,"trades"),{from:currentUser,items,timestamp:Date.now()});
       alert("Trade enviado a "+target);
@@ -218,6 +225,7 @@
       const snap=await getDocs(collection(db,"users",currentUser,"trades"));
       const div=document.getElementById("receivedTrades");
       if(snap.empty){div.innerHTML="<p>No tienes trades.</p>"; return;}
+      div.innerHTML="";
       snap.forEach(docSnap=>{
         const trade=docSnap.data();
         let itemsHtml="";
@@ -228,21 +236,24 @@
           <div class="trade">
             <b>De: ${trade.from}</b><br>
             Items: <br>${itemsHtml}
-            <button onclick="acceptTrade('${docSnap.id}','${trade.from}')">Aceptar</button>
+            <button onclick="acceptTrade('${docSnap.id}','${trade.from}',${JSON.stringify(trade.items).replace(/"/g,'&quot;')})">Aceptar</button>
             <button onclick="rejectTrade('${docSnap.id}')">Rechazar</button>
           </div><br>`;
       });
     }
 
-    async function acceptTrade(tradeId,from){
-      const ref=doc(db,"users",currentUser,"trades",tradeId);
-      const snap=await getDoc(ref);
-      if(!snap.exists()) return;
-      const trade=snap.data();
-      for(let it of trade.items){
+    async function acceptTrade(tradeId,from,items){
+      const tradeRef=doc(db,"users",currentUser,"trades",tradeId);
+
+      // 🔹 Agregar items al inventario del receptor
+      for(let it of items){
         await addDoc(collection(doc(db,"users",currentUser),"inventory"),it);
+
+        // 🔹 Eliminar items del inventario del que envió
+        await deleteDoc(doc(db,"users",from,"inventory",it.id));
       }
-      await deleteDoc(ref);
+
+      await deleteDoc(tradeRef);
       alert("Trade aceptado");
       loadTrades();
     }
