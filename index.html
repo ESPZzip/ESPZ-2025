@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>ESP:Z - Home</title>
+  <title>Roblox Revival</title>
   <style>
     body { font-family: Arial; background:#eee; margin:0; }
     header { background:#444; color:#fff; padding:10px; display:flex; justify-content:space-between; align-items:center; }
@@ -39,6 +39,8 @@
     <button onclick="loadFriends()">Friends</button>
     <!-- 🔹 Botón Giveaways (solo ROBLOX) -->
     <button id="giveawaysBtn" style="display:none;" onclick="openGiveaways()">Giveaways</button>
+    <!-- 🔹 Botón Cerrar Sesión -->
+    <button id="logoutBtn" style="display:none;" onclick="logout()">Cerrar Sesión</button>
   </nav>
   <div id="content"></div>
 </div>
@@ -123,6 +125,7 @@
       : currentUser;
     document.getElementById("userDisplay").innerHTML=userDisplay;
     document.getElementById("robuxDisplay").style.display="block";
+    document.getElementById("logoutBtn").style.display="block";
     if(currentUser==="ROBLOX"){ 
       document.getElementById("giveawaysBtn").style.display="block"; 
     }
@@ -150,6 +153,12 @@
         document.getElementById("robuxCount").innerText=newRobux;
       }
     },60000);
+  }
+
+  // 🔹 Logout
+  function logout(){
+    localStorage.removeItem("currentUser");
+    location.reload();
   }
 
   // 🔹 Giveaways
