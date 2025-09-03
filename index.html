@@ -1,3 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Revival</title>
+  <style>
+    body{font-family:Arial;margin:0;padding:0;background:#f4f4f4;}
+    #auth,#main{padding:20px;}
+    .hidden{display:none;}
+    .menu{width:200px;float:left;background:#ddd;height:100vh;padding:10px;box-sizing:border-box;}
+    .menu button{display:block;width:100%;margin:5px 0;padding:10px;}
+    #content{margin-left:220px;padding:20px;}
+    .item{border:1px solid #ccc;background:white;padding:10px;margin:10px;display:inline-block;vertical-align:top;}
+    .topbar{background:#222;color:white;padding:10px;text-align:right;}
+    .topbar span{margin-left:15px;}
+    #adminPanel{position:fixed;top:50px;left:50%;transform:translateX(-50%);background:white;padding:20px;border:2px solid black;display:none;z-index:1000;}
+    .agotado{background:#eee;color:#888;}
+  </style>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+</head>
+<body>
+  <div id="auth">
+    <h2>Registro</h2>
+    <input id="regUser" placeholder="Usuario"><br>
+    <input id="regPass" type="password" placeholder="Contraseña"><br>
+    <button onclick="register()">Registrar</button>
+    <h2>Login</h2>
+    <input id="logUser" placeholder="Usuario"><br>
+    <input id="logPass" type="password" placeholder="Contraseña"><br>
+    <button onclick="login()">Login</button>
+  </div>
+
+  <div id="main" class="hidden">
+    <div class="topbar">
+      <span id="userDisplay"></span>
+      <span id="robuxDisplay"></span>
+    </div>
+    <div class="menu">
+      <button onclick="showSection('market')">Marketplace</button>
+      <button onclick="showSection('profile')">Profile</button>
+      <button onclick="showSection('friends')">Friends</button>
+    </div>
+    <div id="content"></div>
+  </div>
+
+  <!-- 🔹 Admin Panel -->
+  <div id="adminPanel">
+    <h2>Admin Panel</h2>
+    <input id="itemName" placeholder="Nombre item"><br>
+    <input id="itemImg" placeholder="URL imagen"><br>
+    <input id="itemPrice" placeholder="Precio"><br>
+    <input id="itemValue" placeholder="Valor"><br>
+    <input id="itemStock" placeholder="Stock"><br>
+    <button onclick="addItem()">Agregar Item</button>
+    <div id="adminItems"></div>
+    <button onclick="closeAdmin()">Cerrar</button>
+  </div>
+
+  <!-- 🔹 Chat -->
+  <div id="chatPanel" style="display:none; position:fixed; bottom:20px; right:20px; width:300px; background:#fff; border:1px solid #000; border-radius:10px; padding:10px;">
+    <h4 id="chatWith">Chat</h4>
+    <div id="chatMessages" style="height:200px; overflow-y:auto; border:1px solid #ccc; margin-bottom:10px; padding:5px;"></div>
+    <input id="chatInput" placeholder="Escribe un mensaje..." style="width:80%;">
+    <button onclick="sendMessage()">Enviar</button>
+    <button onclick="closeChat()">Cerrar</button>
+  </div>
+
 <script>
   // 🔹 Firebase Config
   const firebaseConfig = { 
@@ -16,58 +84,281 @@
   let currentChatUser = null;
   let unsubscribeChat = null;
 
-  // ... 🔹 (aquí sigue todo el código que ya tienes) ...
-
-  // 🔹 Admin
-  async function addItem(){
-    const name = document.getElementById("itemName").value;
-    const img = document.getElementById("itemImg").value;
-    const price = parseInt(document.getElementById("itemPrice").value);
-    const value = parseInt(document.getElementById("itemValue").value);
-    const stock = parseInt(document.getElementById("itemStock").value);
-    await db.collection("items").doc(name).set({ name, img, price, value, stock });
-    alert("Item agregado");
-    loadAdmin();
+  // 🔹 Registro
+  async function register(){
+    const u = document.getElementById("regUser").value;
+    const p = document.getElementById("regPass").value;
+    if(!u||!p) return alert("Completa los campos");
+    const ref = db.collection("users").doc(u);
+    const docu = await ref.get();
+    if(docu.exists){ return alert("Usuario ya existe"); }
+    await ref.set({username:u,password:p,robux:100,friends:[],requests:[]});
+    alert("Registrado!");
   }
 
-  async function loadAdmin(){
-    const panel = document.getElementById("adminPanel");
-    panel.style.display = "block";
-    const cont = document.getElementById("adminItems");
-    cont.innerHTML = "";
+  // 🔹 Login
+  async function login(){
+    const u = document.getElementById("logUser").value;
+    const p = document.getElementById("logPass").value;
+    const ref = db.collection("users").doc(u);
+    const docu = await ref.get();
+    if(!docu.exists) return alert("No existe");
+    const data = docu.data();
+    if(data.password!==p) return alert("Contraseña incorrecta");
+    currentUser=u;
+    localStorage.setItem("currentUser",u);
+    startApp();
+  }
+
+  function startApp(){
+    document.getElementById("auth").style.display="none";
+    document.getElementById("main").classList.remove("hidden");
+
+    // 🔹 Tag ADMIN si es ROBLOX
+    const userDisplay = currentUser==="ROBLOX" 
+      ? `${currentUser} <span style="color:red;font-weight:bold;">[ADMIN]</span>` 
+      : currentUser;
+    document.getElementById("userDisplay").innerHTML=userDisplay;
+    loadUserData();
+    showSection('market');
+  }
+
+  async function loadUserData(){
+    const snap = await db.collection("users").doc(currentUser).get();
+    const data = snap.data();
+    document.getElementById("robuxDisplay").innerText="💰 "+data.robux;
+  }
+
+  // 🔹 Navegación
+  function showSection(sec){
+    if(sec==='market') loadMarket();
+    if(sec==='profile') loadProfile();
+    if(sec==='friends') loadFriends();
+  }
+
+  // 🔹 Marketplace
+  async function loadMarket(){
     const snap = await db.collection("items").get();
+    const cont=document.getElementById("content");
+    cont.innerHTML="<h2>Marketplace</h2>";
     snap.forEach(doc=>{
-      const item = doc.data();
-      cont.innerHTML += `
-        <div class="item">
-          <img src="${item.img}" width="50"> ${item.name} (Stock: ${item.stock})
-          <button class="btn btn-delete" onclick="deleteItem('${doc.id}')">X</button>
+      const item=doc.data();
+      cont.innerHTML+=`
+        <div class="item ${item.stock===0?'agotado':''}">
+          <img src="${item.img}" width="80"><br>
+          <b>${item.name}</b><br>
+          💰 ${item.price} | ⭐ ${item.value}<br>
+          Stock: ${item.stock}<br>
+          <button onclick="buyItem('${doc.id}')">Comprar</button>
         </div>`;
     });
   }
 
-  async function deleteItem(id){
-    await db.collection("items").doc(id).delete();
-    loadAdmin();
+  async function buyItem(id){
+    const userRef=db.collection("users").doc(currentUser);
+    const itemRef=db.collection("items").doc(id);
+    await db.runTransaction(async(t)=>{
+      const uDoc=await t.get(userRef);
+      const iDoc=await t.get(itemRef);
+      if(!uDoc.exists||!iDoc.exists) throw "Error";
+      const user=uDoc.data(), item=iDoc.data();
+      if(item.stock<=0) throw "NO HAY STOCK";
+      if(user.robux<item.price) throw "No tienes Robux";
+      t.update(userRef,{robux:user.robux-item.price});
+      t.update(itemRef,{stock:item.stock-1});
+      t.set(userRef.collection("inventory").doc(item.name),item);
+    }).then(()=>{alert("Comprado!");loadUserData();loadMarket();})
+    .catch(e=>alert(e));
   }
 
-  function closeAdmin(){ document.getElementById("adminPanel").style.display="none"; }
+  // 🔹 Profile
+  async function loadProfile(){
+    const cont=document.getElementById("content");
+    cont.innerHTML="<h2>Perfil</h2><div id='inv'></div>";
+    const invSnap=await db.collection("users").doc(currentUser).collection("inventory").get();
+    const invDiv=document.getElementById("inv");
+    if(invSnap.empty) invDiv.innerHTML="<p>Sin items</p>";
+    else invSnap.forEach(doc=>{
+      const item=doc.data();
+      invDiv.innerHTML+=`<div class="item"><img src="${item.img}" width="80"><br><b>${item.name}</b><br>⭐ ${item.value}</div>`;
+    });
+  }
 
-  // 🔹 Atajo con tecla INSERT para abrir/cerrar Admin Panel
-  document.addEventListener("keydown", (e)=>{
-    if(e.key === "Insert"){
-      const panel = document.getElementById("adminPanel");
-      if(panel.style.display === "block"){
-        closeAdmin();
-      } else {
-        loadAdmin();
-      }
+  // 🔹 Friends
+  async function loadFriends(){
+    const cont=document.getElementById("content");
+    cont.innerHTML=`<h2>Amigos</h2>
+      <input id="searchFriend" placeholder="Buscar usuario">
+      <button onclick="searchFriend()">Buscar</button>
+      <div id="friendResult"></div>
+      <h3>Solicitudes</h3><div id="requests"></div>
+      <h3>Mis Amigos</h3><div id="myFriends"></div>`;
+    loadRequests(); loadMyFriends();
+  }
+
+  async function searchFriend(){
+    const name=document.getElementById("searchFriend").value;
+    const ref=db.collection("users").doc(name);
+    const doc=await ref.get();
+    const div=document.getElementById("friendResult");
+    if(!doc.exists) div.innerHTML="<p>No encontrado</p>";
+    else div.innerHTML=`<p>${name} <button onclick="sendRequest('${name}')">Agregar</button></p>`;
+  }
+
+  async function sendRequest(to){
+    const ref=db.collection("users").doc(to);
+    await ref.update({requests:firebase.firestore.FieldValue.arrayUnion(currentUser)});
+    alert("Solicitud enviada");
+  }
+
+  async function loadRequests(){
+    const snap=await db.collection("users").doc(currentUser).get();
+    const data=snap.data();
+    const div=document.getElementById("requests");
+    div.innerHTML="";
+    data.requests.forEach(r=>{
+      div.innerHTML+=`<p>${r} <button onclick="acceptRequest('${r}')">Aceptar</button></p>`;
+    });
+  }
+
+  async function acceptRequest(from){
+    const uRef=db.collection("users").doc(currentUser);
+    const fRef=db.collection("users").doc(from);
+    await uRef.update({
+      friends:firebase.firestore.FieldValue.arrayUnion(from),
+      requests:firebase.firestore.FieldValue.arrayRemove(from)
+    });
+    await fRef.update({
+      friends:firebase.firestore.FieldValue.arrayUnion(currentUser)
+    });
+    loadRequests(); loadMyFriends();
+  }
+
+  async function loadMyFriends(){
+    const snap=await db.collection("users").doc(currentUser).get();
+    const data=snap.data();
+    const cont=document.getElementById("myFriends");
+    cont.innerHTML="";
+    if(!data.friends||data.friends.length===0){cont.innerHTML="<p>No tienes amigos</p>";return;}
+    for(const u of data.friends){
+      cont.innerHTML+=`
+        <div class="item">
+          <b>${u}</b><br>
+          <button onclick="openChat('${u}')">Chatear</button>
+          <button onclick="viewFriendInventory('${u}')">Ver Inventario</button>
+        </div>`;
+    }
+  }
+
+  // 🔹 Inventario de amigos
+  async function viewFriendInventory(user){
+    const content=document.getElementById("content");
+    const snap=await db.collection("users").doc(user).get();
+    if(!snap.exists){content.innerHTML="<p>No encontrado</p>";return;}
+    const data=snap.data();
+    let html=`<h2>Inventario de ${data.username}</h2>`;
+    html+=`<p>Robux: 💰 ${data.robux}</p>`;
+    html+=`<h3>Items:</h3><div id='friendInventory'></div>`;
+    content.innerHTML=html;
+
+    const invSnap=await db.collection("users").doc(user).collection("inventory").get();
+    const invDiv=document.getElementById("friendInventory");
+    if(invSnap.empty) invDiv.innerHTML="<p>No tiene items.</p>";
+    else {
+      const itemsSnap=await db.collection("items").get();
+      let stockMap={};
+      itemsSnap.forEach(doc=>{stockMap[doc.data().name]=doc.data().stock;});
+      invSnap.forEach(doc=>{
+        const item=doc.data();
+        const stock=stockMap[item.name]!==undefined?stockMap[item.name]:"N/A";
+        const agotado=stock===0;
+        invDiv.innerHTML+=`
+          <div class="item ${agotado?'agotado':''}">
+            <img src="${item.img}" width="80"><br>
+            <b>${item.name}</b><br>
+            ⭐ ${item.value}<br>
+            ${agotado?"<b>🚫 Agotado en Marketplace</b>":"Stock global: "+stock}
+          </div>`;
+      });
+    }
+  }
+
+  // 🔹 Chat
+  function getChatId(u1,u2){return [u1,u2].sort().join("_");}
+  async function openChat(friend){
+    currentChatUser=friend;
+    document.getElementById("chatWith").innerText="Chat con "+friend;
+    document.getElementById("chatPanel").style.display="block";
+    loadChat(friend);
+  }
+  function closeChat(){
+    document.getElementById("chatPanel").style.display="none";
+    if(unsubscribeChat)unsubscribeChat();
+    currentChatUser=null;
+  }
+  function loadChat(friend){
+    const chatId=getChatId(currentUser,friend);
+    const chatRef=db.collection("chats").doc(chatId).collection("messages").orderBy("time");
+    if(unsubscribeChat)unsubscribeChat();
+    unsubscribeChat=chatRef.onSnapshot(snap=>{
+      const div=document.getElementById("chatMessages");
+      div.innerHTML="";
+      snap.forEach(doc=>{
+        const msg=doc.data();
+        div.innerHTML+=`<p><b>${msg.from}:</b> ${msg.text}</p>`;
+      });
+      div.scrollTop=div.scrollHeight;
+    });
+  }
+  async function sendMessage(){
+    const text=document.getElementById("chatInput").value.trim();
+    if(!text) return;
+    const chatId=getChatId(currentUser,currentChatUser);
+    await db.collection("chats").doc(chatId).collection("messages").add({
+      from:currentUser,text,time:firebase.firestore.FieldValue.serverTimestamp()
+    });
+    document.getElementById("chatInput").value="";
+  }
+
+  // 🔹 Admin
+  async function addItem(){
+    const name=document.getElementById("itemName").value;
+    const img=document.getElementById("itemImg").value;
+    const price=parseInt(document.getElementById("itemPrice").value);
+    const value=parseInt(document.getElementById("itemValue").value);
+    const stock=parseInt(document.getElementById("itemStock").value);
+    await db.collection("items").doc(name).set({name,img,price,value,stock});
+    alert("Item agregado");loadAdmin();
+  }
+  async function loadAdmin(){
+    const panel=document.getElementById("adminPanel");
+    panel.style.display="block";
+    const cont=document.getElementById("adminItems");
+    cont.innerHTML="";
+    const snap=await db.collection("items").get();
+    snap.forEach(doc=>{
+      const item=doc.data();
+      cont.innerHTML+=`<div class="item"><img src="${item.img}" width="50"> ${item.name} (Stock: ${item.stock}) <button onclick="deleteItem('${doc.id}')">X</button></div>`;
+    });
+  }
+  async function deleteItem(id){
+    await db.collection("items").doc(id).delete();loadAdmin();
+  }
+  function closeAdmin(){document.getElementById("adminPanel").style.display="none";}
+
+  // 🔹 Atajo con tecla INSERT solo para ROBLOX
+  document.addEventListener("keydown",(e)=>{
+    if(e.key==="Insert" && currentUser==="ROBLOX"){
+      const panel=document.getElementById("adminPanel");
+      if(panel.style.display==="block"){closeAdmin();} else {loadAdmin();}
     }
   });
 
-  // 🔹 Mantener login si estaba guardado
-  window.onload = function(){
-    const u = localStorage.getItem("currentUser");
-    if(u){ currentUser = u; startApp(); }
+  // 🔹 Mantener login
+  window.onload=function(){
+    const u=localStorage.getItem("currentUser");
+    if(u){currentUser=u;startApp();}
   }
 </script>
+</body>
+</html>
