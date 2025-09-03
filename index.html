@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>ESP:Z</title>
+  <title>Roblox Revival Firebase</title>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"></script>
   <style>
@@ -21,13 +21,17 @@
     .card { background:#2c2c40; padding:20px; border-radius:12px; width:300px; margin:auto; margin-top:100px; text-align:center; }
     input { margin:5px; padding:8px; width:80%; border-radius:6px; border:none; }
     button { margin-top:10px; padding:10px; border-radius:8px; border:none; cursor:pointer; }
+    #logoutBtn { background:#ff4d4d; padding:8px 12px; border-radius:8px; cursor:pointer; }
   </style>
 </head>
 <body>
 
 <header>
   <div>🔥 Roblox Revival</div>
-  <div class="robux" id="robuxBox" style="display:none;">💰 <span id="robuxDisplay">0</span> R$</div>
+  <div style="display:flex; align-items:center; gap:15px;">
+    <div class="robux" id="robuxBox" style="display:none;">💰 <span id="robuxDisplay">0</span> R$</div>
+    <button id="logoutBtn" style="display:none;" onclick="logout()">Salir</button>
+  </div>
 </header>
 
 <!-- 🔹 Sección de login/registro -->
@@ -101,10 +105,8 @@
       return;
     }
 
-    // Crear usuario
     await ref.set({ username:user, password:pass, robux:500 });
 
-    // Guardar sesión y loguear
     currentUser = user;
     localStorage.setItem("loggedUser", user);
 
@@ -139,6 +141,17 @@
     await loadUserData();
   }
 
+  // 🔹 Logout
+  function logout(){
+    currentUser = null;
+    localStorage.removeItem("loggedUser");
+
+    document.getElementById("authSection").style.display = "block";
+    document.getElementById("mainSection").style.display = "none";
+    document.getElementById("robuxBox").style.display = "none";
+    document.getElementById("logoutBtn").style.display = "none";
+  }
+
   // 🔹 Mantener sesión
   window.onload = async () => {
     const saved = localStorage.getItem("loggedUser");
@@ -155,10 +168,11 @@
 
     document.getElementById("robuxDisplay").innerText = userDoc.data().robux;
     document.getElementById("robuxBox").style.display="flex";
+    document.getElementById("logoutBtn").style.display="inline-block";
     document.getElementById("authSection").style.display="none";
     document.getElementById("mainSection").style.display="block";
 
-    loadMarketplace(); // default
+    loadMarketplace();
   }
 
   // 🔹 Secciones
