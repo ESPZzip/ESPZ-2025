@@ -15,9 +15,6 @@
     #adminPanel { display:none; position:fixed; top:50px; left:50px; background:white; border:2px solid black; padding:20px; z-index:999; }
     .agotado { opacity:0.5; }
     .tag { padding:2px 6px; border-radius:6px; font-size:12px; font-weight:bold; display:inline-block; margin-bottom:4px; }
-    .chatBox { border:1px solid #aaa; padding:10px; height:200px; overflow-y:auto; background:white; }
-    .chatMsg { margin:4px 0; }
-    .notif { color:red; font-weight:bold; margin-left:6px; }
   </style>
 </head>
 <body>
@@ -39,7 +36,6 @@
     <button onclick="loadMarket()">Marketplace</button>
     <button onclick="loadProfile()">Profile</button>
     <button onclick="loadFriends()">Friends</button>
-    <button onclick="loadChat()">Chat</button>
   </nav>
   <div id="content"></div>
 </div>
@@ -54,21 +50,11 @@
   <input id="itemValue" placeholder="Valor"><br>
   <input id="itemStock" placeholder="Stock"><br>
   <input id="itemTagText" placeholder="Tag texto (opcional)"><br>
-  <input id="itemTagColor" placeholder="Color tag (ej: red, blue, #ff0000)"><br>
-  <input id="itemTagBg" placeholder="Fondo tag (ej: yellow, #00ff00)"><br>
+  <input id="itemTagColor" placeholder="Color tag"><br>
+  <input id="itemTagBg" placeholder="Fondo tag"><br>
   <button onclick="addItem()">Agregar Item</button>
   <div id="adminItems"></div>
-  <hr>
-  <h3>🎁 Regalar Robux</h3>
-  <input id="giftUser" placeholder="Usuario destino"><br>
-  <input id="giftRobux" placeholder="Cantidad"><br>
-  <button onclick="giftRobux()">Enviar Robux</button>
-  <hr>
-  <h3>🎁 Regalar Item</h3>
-  <input id="giftUserItem" placeholder="Usuario destino"><br>
-  <select id="giftItemSelect"></select><br>
-  <button onclick="giftItem()">Enviar Item</button>
-  <br><br>
+  <br>
   <button onclick="closeAdmin()">Cerrar</button>
 </div>
 
@@ -168,6 +154,91 @@
     await ref.update({stock:item.stock-1});
     alert("Comprado!");
     updateRobux(); loadMarket();
+  }
+
+  // 🔹 Profile
+  async function loadProfile(){
+    const cont=document.getElementById("content");
+    cont.innerHTML="<h2>Perfil</h2><div id='inv'></div>";
+    const invSnap=await db.collection("users").doc(currentUser).collection("inventory").get();
+    const invDiv=document.getElementById("inv");
+    if(invSnap.empty) invDiv.innerHTML="<p>Sin items</p>";
+    else invSnap.forEach(doc=>{
+      const item=doc.data();
+      invDiv.innerHTML+=`
+        <div class="item">
+          ${item.tag?`<div class="tag" style="color:${item.tag.color};background:${item.tag.bg};">${item.tag.text}</div>`:""}
+          <img src="${item.img}" width="80"><br>
+          <b>${item.name}</b><br>
+          ⭐ ${item.value}
+        </div>`;
+    });
+  }
+
+  // 🔹 Friends
+  async function loadFriends(){
+    const cont=document.getElementById("content");
+    cont.innerHTML=`<h2>Friends</h2>
+      <input id="friendSearch" placeholder="Buscar usuario">
+      <button onclick="searchFriend()">Buscar</button>
+      <div id="friendResult"></div>
+      <hr><h3>Solicitudes</h3><div id="reqs"></div>
+      <hr><h3>Tus Amigos</h3><div id="myfriends"></div>`;
+    showRequests(); showFriends();
+  }
+
+  async function searchFriend(){
+    const name=document.getElementById("friendSearch").value;
+    if(!name) return;
+    if(name===currentUser) return alert("No puedes agregarte a ti mismo");
+    const ref=db.collection("users").doc(name);
+    const snap=await ref.get();
+    if(!snap.exists){document.getElementById("friendResult").innerHTML="Usuario no encontrado"; return;}
+    document.getElementById("friendResult").innerHTML=
+      `${name} <button onclick="sendRequest('${name}')">Enviar solicitud</button>`;
+  }
+
+  async function sendRequest(to){
+    const ref=db.collection("users").doc(to);
+    await ref.update({
+      requests:firebase.firestore.FieldValue.arrayUnion(currentUser)
+    });
+    alert("Solicitud enviada");
+  }
+
+  async function showRequests(){
+    const ref=db.collection("users").doc(currentUser);
+    const snap=await ref.get();
+    const reqs=snap.data().requests||[];
+    const cont=document.getElementById("reqs");
+    cont.innerHTML="";
+    reqs.forEach(r=>{
+      cont.innerHTML+=`${r} <button onclick="acceptRequest('${r}')">Aceptar</button><br>`;
+    });
+  }
+
+  async function acceptRequest(from){
+    const userRef=db.collection("users").doc(currentUser);
+    const otherRef=db.collection("users").doc(from);
+    await userRef.update({
+      requests:firebase.firestore.FieldValue.arrayRemove(from),
+      friends:firebase.firestore.FieldValue.arrayUnion(from)
+    });
+    await otherRef.update({
+      friends:firebase.firestore.FieldValue.arrayUnion(currentUser)
+    });
+    loadFriends();
+  }
+
+  async function showFriends(){
+    const ref=db.collection("users").doc(currentUser);
+    const snap=await ref.get();
+    const friends=snap.data().friends||[];
+    const cont=document.getElementById("myfriends");
+    cont.innerHTML="";
+    friends.forEach(f=>{
+      cont.innerHTML+=`${f}<br>`;
+    });
   }
 
   // 🔹 Admin Panel
