@@ -74,6 +74,7 @@
     const db=firebase.firestore();
 
     let currentUser=null;
+    let unsubscribeNotifications=null;
 
     // 🔹 Registro
     async function register(){
@@ -111,6 +112,8 @@
         extra.innerHTML+=`<button onclick="loadGiveaways()">Giveaways</button>`;
       }
       extra.innerHTML+=`<button onclick="logout()">Cerrar Sesión</button>`;
+
+      listenNotifications(); // 👈 Escuchar notificaciones en tiempo real
     }
 
     // 🔹 Robux
@@ -253,7 +256,7 @@
       }
     }
 
-    // 🔹 Enviar Robux a amigo
+    // 🔹 Enviar Robux a amigo (con notificación)
     async function giftRobux(user){
       const amount=parseInt(document.getElementById("giftAmount").value);
       if(!amount || amount<=0) return alert("Cantidad inválida");
@@ -263,9 +266,34 @@
       await uref.update({robux:usnap.data().robux-amount});
       const fsnap=await db.collection("users").doc(user).get();
       await db.collection("users").doc(user).update({robux:fsnap.data().robux+amount});
+
+      // 🔔 Crear notificación en Firestore
+      await db.collection("users").doc(user).collection("notifications").add({
+        message:`${currentUser} te envió ${amount} Robux`,
+        timestamp:Date.now()
+      });
+
       alert("Robux enviados!");
       updateRobux();
       viewFriendInventory(user);
+    }
+
+    // 🔹 Escuchar notificaciones en tiempo real
+    function listenNotifications(){
+      if(unsubscribeNotifications) unsubscribeNotifications();
+      unsubscribeNotifications=db.collection("users").doc(currentUser)
+        .collection("notifications")
+        .orderBy("timestamp","desc")
+        .onSnapshot((snap)=>{
+          snap.docChanges().forEach(change=>{
+            if(change.type==="added"){
+              const data=change.doc.data();
+              alert("🔔 " + data.message);
+              // Opcional: borrar notificación después de mostrarla
+              db.collection("users").doc(currentUser).collection("notifications").doc(change.doc.id).delete();
+            }
+          });
+        });
     }
 
     // 🔹 Giveaways (solo admin)
@@ -285,12 +313,20 @@
       const snap=await db.collection("users").doc(user).get();
       if(!snap.exists)return alert("No existe ese usuario");
       await db.collection("users").doc(user).update({robux:snap.data().robux+amount});
+
+      // 🔔 Notificación para el ganador
+      await db.collection("users").doc(user).collection("notifications").add({
+        message:`Has recibido ${amount} Robux de un Giveaway 🎉`,
+        timestamp:Date.now()
+      });
+
       alert("Enviado!");
     }
 
     // 🔹 Logout
     function logout(){
       currentUser=null;
+      if(unsubscribeNotifications) unsubscribeNotifications();
       localStorage.removeItem("currentUser");
       location.reload();
     }
