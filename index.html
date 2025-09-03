@@ -16,10 +16,11 @@
     .btn-buy { background:#28a745; color:white; }
     .btn-delete { background:#dc3545; color:white; }
     .btn-edit { background:#007bff; color:white; }
-    .btn-friend { background:#17a2b8; color:white; }
     #adminPanel { display:none; position:fixed; top:50px; right:50px; background:white; padding:20px; border:2px solid #000; border-radius:8px; width:350px; max-height:500px; overflow-y:auto; }
     #loginArea, #registerArea { margin:50px auto; width:300px; padding:20px; background:#fff; border:1px solid #ccc; border-radius:10px; }
     input { width:90%; padding:8px; margin:5px 0; }
+    #chatPanel { display:none; position:fixed; bottom:20px; right:20px; width:300px; background:#fff; border:1px solid #000; border-radius:10px; padding:10px; }
+    #chatMessages { height:200px; overflow-y:auto; border:1px solid #ccc; margin-bottom:10px; padding:5px; }
   </style>
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
@@ -71,9 +72,9 @@
 </div>
 
 <!-- Chat Panel -->
-<div id="chatPanel" style="display:none; position:fixed; bottom:20px; right:20px; width:300px; background:#fff; border:1px solid #000; border-radius:10px; padding:10px;">
+<div id="chatPanel">
   <h4 id="chatWith">Chat</h4>
-  <div id="chatMessages" style="height:200px; overflow-y:auto; border:1px solid #ccc; margin-bottom:10px; padding:5px;"></div>
+  <div id="chatMessages"></div>
   <input id="chatInput" placeholder="Escribe un mensaje..." style="width:80%;">
   <button onclick="sendMessage()">Enviar</button>
   <button onclick="closeChat()">Cerrar</button>
@@ -202,29 +203,18 @@
 
   // 🔹 Profile
   async function loadProfile(){
-    const content = document.getElementById("content");
     const snap = await db.collection("users").doc(currentUser).get();
     const data = snap.data();
-
-    let html = `<h2>Perfil de ${data.username}</h2>`;
-    html += `<p>Robux: 💰 ${data.robux}</p>`;
-    html += `<h3>Inventario:</h3><div id='inventory'></div>`;
-    content.innerHTML = html;
-
+    const content = document.getElementById("content");
+    content.innerHTML = `<h2>Perfil de ${data.username}</h2><p>Robux: 💰 ${data.robux}</p><h3>Inventario:</h3><div id='myInventory'></div>`;
     const invSnap = await db.collection("users").doc(currentUser).collection("inventory").get();
-    const invDiv = document.getElementById("inventory");
-    if(invSnap.empty){ 
-      invDiv.innerHTML = "<p>No tienes items.</p>";
+    const invDiv = document.getElementById("myInventory");
+    if(invSnap.empty){
+      invDiv.innerHTML = "<p>No tienes items</p>";
     } else {
       invSnap.forEach(doc=>{
         const item = doc.data();
-        invDiv.innerHTML += `
-          <div class="item">
-            <img src="${item.img}" width="80"><br>
-            <b>${item.name}</b><br>
-            ⭐ ${item.value}
-          </div>
-        `;
+        invDiv.innerHTML += `<div class="item"><img src="${item.img}" width="80"><br><b>${item.name}</b><br>⭐ ${item.value}</div>`;
       });
     }
   }
@@ -233,81 +223,67 @@
   async function loadFriends(){
     const content = document.getElementById("content");
     content.innerHTML = `
-      <h2>Amigos</h2>
-      <input id="friendSearch" placeholder="Buscar usuario...">
+      <h2>Friends</h2>
+      <input id="searchFriend" placeholder="Buscar usuario">
       <button onclick="searchUser()">Buscar</button>
       <div id="searchResult"></div>
-      <h3>Solicitudes</h3>
-      <div id="friendRequests"></div>
-      <h3>Mis Amigos</h3>
-      <div id="myFriends"></div>
+      <h3>Solicitudes de amistad</h3><div id="requests"></div>
+      <h3>Mis amigos</h3><div id="myFriends"></div>
     `;
     loadRequests();
     loadMyFriends();
   }
 
   async function searchUser(){
-    const name = document.getElementById("friendSearch").value;
+    const name = document.getElementById("searchFriend").value;
     if(!name) return;
     const snap = await db.collection("users").doc(name).get();
     const result = document.getElementById("searchResult");
-    if(!snap.exists){ 
-      result.innerHTML = "<p>Usuario no encontrado</p>";
-    } else {
-      result.innerHTML = `
-        <div class="item">
-          <b>${name}</b><br>
-          <button class="btn btn-friend" onclick="sendRequest('${name}')">Agregar</button>
-        </div>
-      `;
-    }
+    if(!snap.exists){ result.innerHTML = "<p>No encontrado</p>"; return; }
+    result.innerHTML = `<p>${name} <button onclick="sendRequest('${name}')">Agregar</button></p>`;
   }
 
   async function sendRequest(toUser){
-    if(toUser === currentUser) return alert("No puedes agregarte a ti mismo");
     const ref = db.collection("users").doc(toUser);
     const snap = await ref.get();
-    if(!snap.exists) return alert("Usuario no existe");
-
-    const data = snap.data();
-    if(data.requests.includes(currentUser)) return alert("Ya le enviaste solicitud");
-
-    await ref.update({
-      requests: firebase.firestore.FieldValue.arrayUnion(currentUser)
-    });
-    alert("Solicitud enviada ✅");
+    if(!snap.exists) return;
+    let requests = snap.data().requests || [];
+    if(!requests.includes(currentUser)){
+      requests.push(currentUser);
+      await ref.update({ requests });
+      alert("Solicitud enviada");
+    }
   }
 
   async function loadRequests(){
     const snap = await db.collection("users").doc(currentUser).get();
     const data = snap.data();
-    const cont = document.getElementById("friendRequests");
+    const cont = document.getElementById("requests");
     cont.innerHTML = "";
-    if(!data.requests || data.requests.length === 0){
+    if(!data.requests || data.requests.length===0){
       cont.innerHTML = "<p>No tienes solicitudes</p>";
       return;
     }
     data.requests.forEach(u=>{
-      cont.innerHTML += `
-        <div class="item">
-          <b>${u}</b><br>
-          <button class="btn btn-friend" onclick="acceptRequest('${u}')">Aceptar</button>
-        </div>
-      `;
+      cont.innerHTML += `<p>${u} <button onclick="acceptRequest('${u}')">Aceptar</button></p>`;
     });
   }
 
-  async function acceptRequest(fromUser){
-    const meRef = db.collection("users").doc(currentUser);
-    const fromRef = db.collection("users").doc(fromUser);
+  async function acceptRequest(u){
+    const userRef = db.collection("users").doc(currentUser);
+    const friendRef = db.collection("users").doc(u);
+    const snap = await userRef.get();
+    const data = snap.data();
+    let friends = data.friends || [];
+    if(!friends.includes(u)) friends.push(u);
+    let requests = data.requests.filter(r=>r!==u);
+    await userRef.update({ friends, requests });
 
-    await meRef.update({
-      requests: firebase.firestore.FieldValue.arrayRemove(fromUser),
-      friends: firebase.firestore.FieldValue.arrayUnion(fromUser)
-    });
-    await fromRef.update({
-      friends: firebase.firestore.FieldValue.arrayUnion(currentUser)
-    });
+    const snapF = await friendRef.get();
+    let friendsF = snapF.data().friends || [];
+    if(!friendsF.includes(currentUser)) friendsF.push(currentUser);
+    await friendRef.update({ friends: friendsF });
+
     loadRequests();
     loadMyFriends();
   }
@@ -322,45 +298,66 @@
       return;
     }
     for(const u of data.friends){
-      const chatId = getChatId(currentUser, u);
-      const unreadSnap = await db.collection("chats")
-        .doc(chatId)
-        .collection("messages")
-        .where("to", "==", currentUser)
-        .where("read", "==", false)
-        .get();
-      const unreadCount = unreadSnap.size;
       cont.innerHTML += `
         <div class="item">
           <b>${u}</b><br>
-          <button class="btn btn-friend" onclick="openChat('${u}')">
-            Chatear ${unreadCount > 0 ? "📩("+unreadCount+")" : ""}
-          </button>
+          <button class="btn btn-friend" onclick="openChat('${u}')">Chatear</button>
+          <button class="btn btn-edit" onclick="viewFriendInventory('${u}')">Ver Inventario</button>
         </div>
       `;
     }
   }
 
-  // 🔹 Chat
-  function getChatId(u1, u2){
-    return [u1, u2].sort().join("_");
+  // 🔹 Ver inventario de amigos con estado de stock
+  async function viewFriendInventory(user){
+    const content = document.getElementById("content");
+    const snap = await db.collection("users").doc(user).get();
+    if(!snap.exists){ 
+      content.innerHTML = "<p>Usuario no encontrado</p>"; 
+      return;
+    }
+    const data = snap.data();
+    let html = `<h2>Inventario de ${data.username}</h2>`;
+    html += `<p>Robux: 💰 ${data.robux}</p>`;
+    html += `<h3>Items:</h3><div id='friendInventory'></div>`;
+    content.innerHTML = html;
+
+    const invSnap = await db.collection("users").doc(user).collection("inventory").get();
+    const invDiv = document.getElementById("friendInventory");
+    if(invSnap.empty){ 
+      invDiv.innerHTML = "<p>No tiene items.</p>";
+    } else {
+      const itemsSnap = await db.collection("items").get();
+      let stockMap = {};
+      itemsSnap.forEach(doc=>{
+        stockMap[doc.data().name] = doc.data().stock;
+      });
+
+      invSnap.forEach(doc=>{
+        const item = doc.data();
+        const stock = stockMap[item.name] !== undefined ? stockMap[item.name] : "N/A";
+        const agotado = stock === 0;
+
+        invDiv.innerHTML += `
+          <div class="item ${agotado ? 'agotado' : ''}">
+            <img src="${item.img}" width="80"><br>
+            <b>${item.name}</b><br>
+            ⭐ ${item.value}<br>
+            ${agotado ? "<b>🚫 Agotado en Marketplace</b>" : "Stock global: " + stock}
+          </div>
+        `;
+      });
+    }
   }
+
+  // 🔹 Chat
+  function getChatId(u1, u2){ return [u1, u2].sort().join("_"); }
 
   async function openChat(friend){
     currentChatUser = friend;
     document.getElementById("chatWith").innerText = "Chat con " + friend;
     document.getElementById("chatPanel").style.display = "block";
     loadChat(friend);
-
-    // 🔹 marcar como leídos
-    const chatId = getChatId(currentUser, friend);
-    const unread = await db.collection("chats").doc(chatId).collection("messages")
-      .where("to", "==", currentUser)
-      .where("read", "==", false).get();
-    unread.forEach(async doc=>{
-      await doc.ref.update({ read:true });
-    });
-    loadMyFriends();
   }
 
   function closeChat(){
@@ -394,9 +391,7 @@
     const chatId = getChatId(currentUser, currentChatUser);
     await db.collection("chats").doc(chatId).collection("messages").add({
       from: currentUser,
-      to: currentChatUser,
       text,
-      read:false,
       time: firebase.firestore.FieldValue.serverTimestamp()
     });
 
@@ -410,50 +405,38 @@
     const price = parseInt(document.getElementById("itemPrice").value);
     const value = parseInt(document.getElementById("itemValue").value);
     const stock = parseInt(document.getElementById("itemStock").value);
-
-    if(!name || !img || !price || !stock) return alert("Completa todos los campos");
-
-    await db.collection("items").add({ name, img, price, value, stock });
-    loadAdminItems();
-    alert("✅ Item agregado");
+    await db.collection("items").doc(name).set({ name, img, price, value, stock });
+    alert("Item agregado");
+    loadAdmin();
   }
 
-  async function loadAdminItems(){
-    const container = document.getElementById("adminItems");
-    container.innerHTML = "";
+  async function loadAdmin(){
+    const panel = document.getElementById("adminPanel");
+    panel.style.display = "block";
+    const cont = document.getElementById("adminItems");
+    cont.innerHTML = "";
     const snap = await db.collection("items").get();
-    if(snap.empty){
-      container.innerHTML = "<p>No hay items</p>";
-      return;
-    }
     snap.forEach(doc=>{
       const item = doc.data();
-      container.innerHTML += `
+      cont.innerHTML += `
         <div class="item">
-          <b>${item.name}</b><br>
-          Stock: ${item.stock}<br>
-          <button class="btn btn-edit" onclick="updateStock('${doc.id}')">Editar Stock</button>
-        </div>
-      `;
+          <img src="${item.img}" width="50"> ${item.name} (Stock: ${item.stock})
+          <button class="btn btn-delete" onclick="deleteItem('${doc.id}')">X</button>
+        </div>`;
     });
   }
 
-  async function updateStock(id){
-    const nuevo = prompt("Nuevo stock:");
-    if(!nuevo) return;
-    await db.collection("items").doc(id).update({ stock: parseInt(nuevo) });
-    loadAdminItems();
+  async function deleteItem(id){
+    await db.collection("items").doc(id).delete();
+    loadAdmin();
   }
 
   function closeAdmin(){ document.getElementById("adminPanel").style.display="none"; }
 
-  // 🔹 Auto login
-  window.onload = ()=>{
-    const saved = localStorage.getItem("currentUser");
-    if(saved){
-      currentUser = saved;
-      startApp();
-    }
+  // 🔹 Mantener login si estaba guardado
+  window.onload = function(){
+    const u = localStorage.getItem("currentUser");
+    if(u){ currentUser = u; startApp(); }
   }
 </script>
 </body>
