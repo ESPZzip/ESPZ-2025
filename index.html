@@ -17,6 +17,7 @@
     .tag { padding:2px 6px; border-radius:6px; font-size:12px; font-weight:bold; display:inline-block; margin-bottom:4px; }
     .chatBox { border:1px solid #aaa; padding:10px; height:200px; overflow-y:auto; background:white; }
     .chatMsg { margin:4px 0; }
+    .notif { color:red; font-weight:bold; margin-left:6px; }
   </style>
 </head>
 <body>
@@ -153,7 +154,6 @@
     });
   }
 
-  // 🔹 Comprar
   async function buyItem(id){
     const ref=db.collection("items").doc(id);
     const snap=await ref.get();
@@ -170,218 +170,58 @@
     updateRobux(); loadMarket();
   }
 
-  // 🔹 Perfil
-  async function loadProfile(){
-    const cont=document.getElementById("content");
-    cont.innerHTML="<h2>Perfil</h2><div id='inv'></div>";
-    const invSnap=await db.collection("users").doc(currentUser).collection("inventory").get();
-    const invDiv=document.getElementById("inv");
-    if(invSnap.empty) invDiv.innerHTML="<p>Sin items</p>";
-    else invSnap.forEach(doc=>{
-      const item=doc.data();
-      invDiv.innerHTML+=`
-        <div class="item">
-          ${item.tag?`<div class="tag" style="color:${item.tag.color};background:${item.tag.bg};">${item.tag.text}</div>`:""}
-          <img src="${item.img}" width="80"><br>
-          <b>${item.name}</b><br>
-          ⭐ ${item.value}
-        </div>`;
-    });
-  }
-
-  // 🔹 Friends
-  async function loadFriends(){
-    const cont=document.getElementById("content");
-    cont.innerHTML=`<h2>Friends</h2>
-      <input id="friendSearch" placeholder="Buscar usuario">
-      <button onclick="searchFriend()">Buscar</button>
-      <div id="friendResult"></div>
-      <hr><h3>Solicitudes</h3><div id="reqs"></div>
-      <hr><h3>Tus Amigos</h3><div id="myfriends"></div>`;
-    showRequests(); showFriends();
-  }
-
-  async function searchFriend(){
-    const name=document.getElementById("friendSearch").value;
-    if(!name) return;
-    const ref=db.collection("users").doc(name);
-    const snap=await ref.get();
-    const res=document.getElementById("friendResult");
-    if(!snap.exists){res.innerHTML="<p>No existe</p>"; return;}
-    if(name===currentUser){res.innerHTML="<p>No puedes agregarte</p>"; return;}
-    res.innerHTML=`<p>${name} <button onclick="addFriend('${name}')">Añadir</button></p>`;
-  }
-
-  async function addFriend(name){
-    const ref=db.collection("users").doc(name);
-    const snap=await ref.get();
-    if(!snap.exists) return;
-    const reqs=snap.data().requests||[];
-    if(reqs.includes(currentUser)) return alert("Ya enviado");
-    await ref.update({requests:[...reqs,currentUser]});
-    alert("Solicitud enviada");
-  }
-
-  async function showRequests(){
-    const ref=db.collection("users").doc(currentUser);
-    const snap=await ref.get();
-    const reqs=snap.data().requests||[];
-    const div=document.getElementById("reqs");
-    div.innerHTML="";
-    reqs.forEach(r=>{
-      div.innerHTML+=`<p>${r} 
-        <button onclick="acceptReq('${r}')">Aceptar</button>
-        <button onclick="rejectReq('${r}')">Rechazar</button></p>`;
-    });
-  }
-
-  async function acceptReq(name){
-    const ref=db.collection("users").doc(currentUser);
-    const snap=await ref.get();
-    const data=snap.data();
-    const newReqs=(data.requests||[]).filter(r=>r!==name);
-    const newFriends=[...(data.friends||[]),name];
-    await ref.update({requests:newReqs,friends:newFriends});
-    const fref=db.collection("users").doc(name);
-    const fsnap=await fref.get();
-    const fdata=fsnap.data();
-    await fref.update({friends:[...(fdata.friends||[]),currentUser]});
-    showRequests(); showFriends();
-  }
-
-  async function rejectReq(name){
-    const ref=db.collection("users").doc(currentUser);
-    const snap=await ref.get();
-    const data=snap.data();
-    const newReqs=(data.requests||[]).filter(r=>r!==name);
-    await ref.update({requests:newReqs});
-    showRequests();
-  }
-
-  async function showFriends(){
-    const snap=await db.collection("users").doc(currentUser).get();
-    const friends=snap.data().friends||[];
-    const div=document.getElementById("myfriends");
-    div.innerHTML="";
-    friends.forEach(f=>{
-      div.innerHTML+=`<p>${f} <button onclick="openChat('${f}')">Chatear</button></p>`;
-    });
-  }
-
-  // 🔹 Chat
-  function loadChat(){
-    const cont=document.getElementById("content");
-    cont.innerHTML="<h2>Chat</h2><div id='chatList'></div>";
-    showFriendsChat();
-  }
-
-  async function showFriendsChat(){
-    const snap=await db.collection("users").doc(currentUser).get();
-    const friends=snap.data().friends||[];
-    const div=document.getElementById("chatList");
-    if(!friends.length){div.innerHTML="<p>No tienes amigos</p>"; return;}
-    friends.forEach(f=>{
-      div.innerHTML+=`<p>${f} <button onclick="openChat('${f}')">Chatear</button></p>`;
-    });
-  }
-
-  function openChat(friend){
-    const cont=document.getElementById("content");
-    cont.innerHTML=`<h2>Chat con ${friend}</h2>
-      <div id="chatBox" class="chatBox"></div>
-      <input id="chatMsg" placeholder="Mensaje">
-      <button onclick="sendMsg('${friend}')">Enviar</button>
-      <br><button onclick="loadChat()">⬅ Volver</button>`;
-    listenChat(friend);
-  }
-
-  function chatId(u1,u2){ return [u1,u2].sort().join("_"); }
-
-  function listenChat(friend){
-    const box=document.getElementById("chatBox");
-    db.collection("chats").doc(chatId(currentUser,friend))
-      .collection("msgs").orderBy("time")
-      .onSnapshot(snap=>{
-        box.innerHTML="";
-        snap.forEach(doc=>{
-          const m=doc.data();
-          box.innerHTML+=`<div class="chatMsg"><b>${m.from}:</b> ${m.text}</div>`;
-        });
-        box.scrollTop=box.scrollHeight;
-      });
-  }
-
-  async function sendMsg(friend){
-    const msg=document.getElementById("chatMsg").value;
-    if(!msg) return;
-    const cid=chatId(currentUser,friend);
-    await db.collection("chats").doc(cid).collection("msgs").add({
-      from:currentUser,text:msg,time:Date.now()
-    });
-    document.getElementById("chatMsg").value="";
-  }
-
-  // 🔹 Admin Panel funciones
+  // 🔹 Admin Panel
   async function addItem(){
     const name=document.getElementById("itemName").value;
     const img=document.getElementById("itemImg").value;
     const price=parseInt(document.getElementById("itemPrice").value);
     const value=parseInt(document.getElementById("itemValue").value);
     const stock=parseInt(document.getElementById("itemStock").value);
-    const tagText=document.getElementById("itemTagText").value.trim();
-    const tagColor=document.getElementById("itemTagColor").value.trim();
-    const tagBg=document.getElementById("itemTagBg").value.trim();
-
-    const data={name,img,price,value,stock};
-    if(tagText) data.tag={text:tagText,color:tagColor||"black",bg:tagBg||"transparent"};
-
-    await db.collection("items").doc(name).set(data);
+    const tagText=document.getElementById("itemTagText").value;
+    const tagColor=document.getElementById("itemTagColor").value;
+    const tagBg=document.getElementById("itemTagBg").value;
+    const tag=tagText?{text:tagText,color:tagColor||"black",bg:tagBg||"yellow"}:null;
+    await db.collection("items").doc(name).set({name,img,price,value,stock,tag});
     alert("Item agregado");
     loadAdmin();
   }
 
-  function closeAdmin(){document.getElementById("adminPanel").style.display="none";}
+  async function loadAdmin(){
+    const panel=document.getElementById("adminPanel");
+    panel.style.display="block";
+    const cont=document.getElementById("adminItems");
+    cont.innerHTML="<h3>Items actuales:</h3>";
+    const snap=await db.collection("items").get();
+    snap.forEach(doc=>{
+      const item=doc.data();
+      cont.innerHTML+=`
+        <div class="item">
+          ${item.tag?`<div class="tag" style="color:${item.tag.color};background:${item.tag.bg};">${item.tag.text}</div>`:""}
+          <img src="${item.img}" width="60"> <b>${item.name}</b> 
+          💰${item.price} | ⭐${item.value} | Stock: ${item.stock}
+          <button onclick="deleteItem('${doc.id}')">❌ Eliminar</button>
+        </div>`;
+    });
+  }
 
+  async function deleteItem(id){
+    if(confirm("¿Seguro que quieres eliminar este item?")){
+      await db.collection("items").doc(id).delete();
+      alert("Item eliminado del Marketplace");
+      loadAdmin();
+      loadMarket();
+    }
+  }
+
+  function closeAdmin(){ document.getElementById("adminPanel").style.display="none"; }
+
+  // 🔹 Tecla INSERT solo para ROBLOX
   document.addEventListener("keydown",(e)=>{
     if(e.key==="Insert" && currentUser==="ROBLOX"){
       const panel=document.getElementById("adminPanel");
       if(panel.style.display==="block"){closeAdmin();} else {loadAdmin();}
     }
   });
-
-  async function loadAdmin(){
-    document.getElementById("adminPanel").style.display="block";
-    const sel=document.getElementById("giftItemSelect");
-    sel.innerHTML="";
-    const snap=await db.collection("items").get();
-    snap.forEach(d=>{
-      const it=d.data();
-      sel.innerHTML+=`<option value="${it.name}">${it.name}</option>`;
-    });
-  }
-
-  async function giftRobux(){
-    const user=document.getElementById("giftUser").value;
-    const amt=parseInt(document.getElementById("giftRobux").value);
-    if(!user||!amt) return;
-    const ref=db.collection("users").doc(user);
-    const snap=await ref.get();
-    if(!snap.exists) return alert("No existe");
-    const data=snap.data();
-    await ref.update({robux:data.robux+amt});
-    alert("Robux enviados");
-  }
-
-  async function giftItem(){
-    const user=document.getElementById("giftUserItem").value;
-    const itemName=document.getElementById("giftItemSelect").value;
-    if(!user||!itemName) return;
-    const itemSnap=await db.collection("items").doc(itemName).get();
-    if(!itemSnap.exists) return;
-    const item=itemSnap.data();
-    await db.collection("users").doc(user).collection("inventory").doc(itemName).set(item);
-    alert("Item enviado");
-  }
 
   // 🔹 Mantener login
   window.onload=function(){
