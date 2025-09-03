@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>ESP:Z - Home</title>
+  <title>Roblox Revival Firebase</title>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"></script>
   <style>
@@ -93,7 +93,10 @@
     const docSnap = await ref.get();
     if(docSnap.exists) return alert("Usuario ya existe!");
     await ref.set({ username:user, password:pass, robux:500 });
-    alert("Registrado! Ahora inicia sesión");
+    // 🔥 Auto login después de registrar
+    currentUser = user;
+    localStorage.setItem("loggedUser", user);
+    await loadUserData();
   }
 
   // 🔹 Login usuario
@@ -107,7 +110,7 @@
     if(docSnap.data().password !== pass) return alert("Contraseña incorrecta");
     currentUser = user;
     localStorage.setItem("loggedUser", user);
-    loadUserData();
+    await loadUserData();
   }
 
   // 🔹 Mantener sesión
@@ -127,6 +130,8 @@
     document.getElementById("robuxBox").style.display="flex";
     document.getElementById("authSection").style.display="none";
     document.getElementById("mainSection").style.display="block";
+    // Por defecto mostrar Marketplace
+    loadMarketplace();
   }
 
   // 🔹 Mostrar secciones
