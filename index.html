@@ -70,6 +70,15 @@
   <div id="adminItems"></div>
 </div>
 
+<!-- Chat Panel -->
+<div id="chatPanel" style="display:none; position:fixed; bottom:20px; right:20px; width:300px; background:#fff; border:1px solid #000; border-radius:10px; padding:10px;">
+  <h4 id="chatWith">Chat</h4>
+  <div id="chatMessages" style="height:200px; overflow-y:auto; border:1px solid #ccc; margin-bottom:10px; padding:5px;"></div>
+  <input id="chatInput" placeholder="Escribe un mensaje..." style="width:80%;">
+  <button onclick="sendMessage()">Enviar</button>
+  <button onclick="closeChat()">Cerrar</button>
+</div>
+
 <script>
   // 🔹 Firebase Config
   const firebaseConfig = { 
@@ -85,6 +94,8 @@
   const db = firebase.firestore();
 
   let currentUser = null;
+  let currentChatUser = null;
+  let unsubscribeChat = null;
 
   // 🔹 Registro
   async function register(){
@@ -310,9 +321,86 @@
       cont.innerHTML = "<p>No tienes amigos</p>";
       return;
     }
-    data.friends.forEach(u=>{
-      cont.innerHTML += `<div class="item"><b>${u}</b></div>`;
+    for(const u of data.friends){
+      const chatId = getChatId(currentUser, u);
+      const unreadSnap = await db.collection("chats")
+        .doc(chatId)
+        .collection("messages")
+        .where("to", "==", currentUser)
+        .where("read", "==", false)
+        .get();
+      const unreadCount = unreadSnap.size;
+      cont.innerHTML += `
+        <div class="item">
+          <b>${u}</b><br>
+          <button class="btn btn-friend" onclick="openChat('${u}')">
+            Chatear ${unreadCount > 0 ? "📩("+unreadCount+")" : ""}
+          </button>
+        </div>
+      `;
+    }
+  }
+
+  // 🔹 Chat
+  function getChatId(u1, u2){
+    return [u1, u2].sort().join("_");
+  }
+
+  async function openChat(friend){
+    currentChatUser = friend;
+    document.getElementById("chatWith").innerText = "Chat con " + friend;
+    document.getElementById("chatPanel").style.display = "block";
+    loadChat(friend);
+
+    // 🔹 marcar como leídos
+    const chatId = getChatId(currentUser, friend);
+    const unread = await db.collection("chats").doc(chatId).collection("messages")
+      .where("to", "==", currentUser)
+      .where("read", "==", false).get();
+    unread.forEach(async doc=>{
+      await doc.ref.update({ read:true });
     });
+    loadMyFriends();
+  }
+
+  function closeChat(){
+    document.getElementById("chatPanel").style.display = "none";
+    if(unsubscribeChat) unsubscribeChat();
+    currentChatUser = null;
+  }
+
+  function loadChat(friend){
+    const chatId = getChatId(currentUser, friend);
+    const chatRef = db.collection("chats").doc(chatId).collection("messages").orderBy("time");
+
+    if(unsubscribeChat) unsubscribeChat();
+
+    unsubscribeChat = chatRef.onSnapshot(snap=>{
+      const div = document.getElementById("chatMessages");
+      div.innerHTML = "";
+      snap.forEach(doc=>{
+        const msg = doc.data();
+        div.innerHTML += `<p><b>${msg.from}:</b> ${msg.text}</p>`;
+      });
+      div.scrollTop = div.scrollHeight;
+    });
+  }
+
+  async function sendMessage(){
+    const input = document.getElementById("chatInput");
+    const text = input.value.trim();
+    if(!text) return;
+
+    const chatId = getChatId(currentUser, currentChatUser);
+    await db.collection("chats").doc(chatId).collection("messages").add({
+      from: currentUser,
+      to: currentChatUser,
+      text,
+      read:false,
+      time: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    input.value = "";
   }
 
   // 🔹 Admin
@@ -335,57 +423,37 @@
     container.innerHTML = "";
     const snap = await db.collection("items").get();
     if(snap.empty){
-      container.innerHTML = "<p>No hay items en la tienda</p>";
+      container.innerHTML = "<p>No hay items</p>";
       return;
     }
     snap.forEach(doc=>{
       const item = doc.data();
       container.innerHTML += `
-        <div class="item" style="width:180px;">
-          <img src="${item.img}" width="80"><br>
+        <div class="item">
           <b>${item.name}</b><br>
-          💰 ${item.price} ⭐ ${item.value}<br>
           Stock: ${item.stock}<br>
-          <button class="btn btn-edit" onclick="editStock('${doc.id}', ${item.stock})">Editar Stock</button>
-          <button class="btn btn-delete" onclick="deleteItem('${doc.id}')">Eliminar</button>
+          <button class="btn btn-edit" onclick="updateStock('${doc.id}')">Editar Stock</button>
         </div>
       `;
     });
   }
 
-  async function editStock(id, currentStock){
-    const nuevoStock = prompt("Nuevo stock:", currentStock);
-    if(nuevoStock !== null){
-      await db.collection("items").doc(id).update({ stock: parseInt(nuevoStock) });
-      loadAdminItems();
-      loadMarketplace();
-    }
-  }
-
-  async function deleteItem(id){
-    await db.collection("items").doc(id).delete();
+  async function updateStock(id){
+    const nuevo = prompt("Nuevo stock:");
+    if(!nuevo) return;
+    await db.collection("items").doc(id).update({ stock: parseInt(nuevo) });
     loadAdminItems();
-    alert("❌ Item eliminado");
   }
 
-  function closeAdmin(){
-    document.getElementById("adminPanel").style.display="none";
-  }
-
-  document.addEventListener("keydown", (e)=>{
-    if(e.key === "Insert"){
-      const pass = prompt("Contraseña de Admin:");
-      if(pass === "crackythebest"){
-        document.getElementById("adminPanel").style.display="block";
-        loadAdminItems();
-      }
-    }
-  });
+  function closeAdmin(){ document.getElementById("adminPanel").style.display="none"; }
 
   // 🔹 Auto login
   window.onload = ()=>{
     const saved = localStorage.getItem("currentUser");
-    if(saved){ currentUser = saved; startApp(); }
+    if(saved){
+      currentUser = saved;
+      startApp();
+    }
   }
 </script>
 </body>
