@@ -8,19 +8,72 @@
       font-family: Arial, sans-serif;
       background: #1e1e2f;
       color: white;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
       margin: 0;
+      padding: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
     }
+
+    /* Barra superior */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #2c2c40;
+      padding: 10px 20px;
+    }
+    .robux {
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    /* Layout principal */
+    .layout {
+      display: flex;
+      flex: 1;
+    }
+
+    /* Barra lateral */
+    .sidebar {
+      width: 200px;
+      background: #2c2c40;
+      padding: 20px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .sidebar button {
+      background: #4cc9f0;
+      border: none;
+      padding: 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      text-align: left;
+      font-size: 16px;
+    }
+    .sidebar button:hover {
+      background: #3a9bdc;
+    }
+
+    /* Contenido dinámico */
+    .content {
+      flex: 1;
+      padding: 20px;
+      background: #1e1e2f;
+      overflow-y: auto;
+    }
+
+    /* Pantallas de login */
     .card {
       background: #2c2c40;
       padding: 20px;
       border-radius: 12px;
       box-shadow: 0 0 20px rgba(0,0,0,0.5);
       text-align: center;
-      width: 340px;
+      width: 320px;
+      margin: auto;
+      margin-top: 100px;
     }
     input {
       display: block;
@@ -40,31 +93,16 @@
       margin-top: 10px;
     }
     button:hover { background: #265dcc; }
-    #menu, #adminPanel, #marketplace { display: none; }
-    .menu-btn {
-      display: block;
-      background: #4cc9f0;
-      margin: 10px auto;
-      width: 200px;
-    }
-    #adminPanel {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: #111;
-      padding: 20px;
-      border: 2px solid #fff;
-      border-radius: 10px;
-      z-index: 999;
-      width: 350px;
-    }
+
+    /* Marketplace */
     .item {
       background: #3a3a55;
       padding: 10px;
       border-radius: 10px;
       margin: 10px;
       text-align: center;
+      display: inline-block;
+      width: 150px;
     }
     .item img {
       width: 100px;
@@ -79,11 +117,26 @@
     .delete-btn:hover {
       background: #cc0000;
     }
+
+    /* Panel Admin */
+    #adminPanel {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #111;
+      padding: 20px;
+      border: 2px solid #fff;
+      border-radius: 10px;
+      z-index: 999;
+      width: 350px;
+      display: none;
+    }
   </style>
 </head>
 <body>
 
-  <!-- Registro/Login -->
+  <!-- Pantalla de login -->
   <div id="auth" class="card">
     <h2>Registro / Login</h2>
     <input type="text" id="username" placeholder="Usuario">
@@ -93,22 +146,27 @@
     <p id="authMsg"></p>
   </div>
 
-  <!-- Menú principal -->
-  <div id="menu" class="card">
-    <h2>Bienvenido <span id="displayUser"></span></h2>
-    <button class="menu-btn" onclick="openMarketplace()">Marketplace</button>
-    <button class="menu-btn">Profile</button>
-    <button class="menu-btn">Friends</button>
+  <!-- Layout principal -->
+  <div id="app" style="display:none; flex:1; flex-direction:column;">
+    <header>
+      <h2>Bienvenido <span id="displayUser"></span></h2>
+      <div class="robux">💰 <span id="robuxCount">100</span></div>
+    </header>
+    <div class="layout">
+      <!-- Barra lateral -->
+      <div class="sidebar">
+        <button onclick="showPage('marketplace')">Marketplace</button>
+        <button onclick="showPage('profile')">Profile</button>
+        <button onclick="showPage('friends')">Friends</button>
+      </div>
+      <!-- Contenido -->
+      <div class="content" id="contentArea">
+        <h2>Selecciona una opción del menú</h2>
+      </div>
+    </div>
   </div>
 
-  <!-- Marketplace -->
-  <div id="marketplace" class="card">
-    <h2>Marketplace</h2>
-    <div id="itemsList"></div>
-    <button onclick="closeMarketplace()">Volver</button>
-  </div>
-
-  <!-- Panel Admin Secreto -->
+  <!-- Panel Admin -->
   <div id="adminPanel">
     <h2>Panel Admin</h2>
     <p>Agregar ítem al Marketplace:</p>
@@ -125,7 +183,7 @@
     let storedPass = null;
     let items = [];
 
-    // Cargar ítems de localStorage al iniciar
+    // cargar items de localStorage
     window.onload = function() {
       const savedItems = localStorage.getItem("marketItems");
       if (savedItems) {
@@ -154,14 +212,14 @@
       const pass = document.getElementById("password").value;
       if (user === storedUser && pass === storedPass) {
         document.getElementById("auth").style.display = "none";
-        document.getElementById("menu").style.display = "block";
+        document.getElementById("app").style.display = "flex";
         document.getElementById("displayUser").innerText = storedUser;
       } else {
         document.getElementById("authMsg").innerText = "Usuario o contraseña incorrectos.";
       }
     }
 
-    // Detectar tecla Insert para abrir admin
+    // Detectar tecla Insert
     document.addEventListener("keydown", function(e) {
       if (e.key === "Insert") {
         const inputPass = prompt("Introduce la contraseña de admin:");
@@ -177,53 +235,21 @@
       document.getElementById("adminPanel").style.display = "none";
     }
 
-    // Marketplace
-    function openMarketplace() {
-      document.getElementById("menu").style.display = "none";
-      document.getElementById("marketplace").style.display = "block";
-      renderItems();
-    }
-    function closeMarketplace() {
-      document.getElementById("marketplace").style.display = "none";
-      document.getElementById("menu").style.display = "block";
-    }
-
-    function addItem() {
-      const name = document.getElementById("itemName").value;
-      const img = document.getElementById("itemImg").value;
-      const price = document.getElementById("itemPrice").value;
-      const value = document.getElementById("itemValue").value;
-
-      if (!name || !img || !price || !value) {
-        alert("Completa todos los campos.");
-        return;
-      }
-
-      items.push({ name, img, price, value });
-      saveItems(); // guardar en localStorage
-
-      // limpiar inputs
-      document.getElementById("itemName").value = "";
-      document.getElementById("itemImg").value = "";
-      document.getElementById("itemPrice").value = "";
-      document.getElementById("itemValue").value = "";
-
-      alert("Ítem agregado al Marketplace.");
-    }
-
-    function deleteItem(index) {
-      if (confirm("¿Seguro que quieres eliminar este ítem?")) {
-        items.splice(index, 1);
-        saveItems();
-        renderItems();
+    function showPage(page) {
+      const content = document.getElementById("contentArea");
+      if (page === "marketplace") {
+        renderMarketplace(content);
+      } else if (page === "profile") {
+        content.innerHTML = `<h2>Perfil</h2><p>Usuario: ${storedUser}</p>`;
+      } else if (page === "friends") {
+        content.innerHTML = `<h2>Amigos</h2><p>No tienes amigos aún 😢</p>`;
       }
     }
 
-    function renderItems() {
-      const container = document.getElementById("itemsList");
-      container.innerHTML = "";
+    function renderMarketplace(container) {
+      container.innerHTML = "<h2>Marketplace</h2>";
       if (items.length === 0) {
-        container.innerHTML = "<p>No hay ítems aún.</p>";
+        container.innerHTML += "<p>No hay ítems aún.</p>";
         return;
       }
       items.forEach((item, index) => {
@@ -238,6 +264,30 @@
         `;
         container.appendChild(div);
       });
+    }
+
+    function addItem() {
+      const name = document.getElementById("itemName").value;
+      const img = document.getElementById("itemImg").value;
+      const price = document.getElementById("itemPrice").value;
+      const value = document.getElementById("itemValue").value;
+
+      if (!name || !img || !price || !value) {
+        alert("Completa todos los campos.");
+        return;
+      }
+
+      items.push({ name, img, price, value });
+      saveItems();
+      alert("Ítem agregado.");
+    }
+
+    function deleteItem(index) {
+      if (confirm("¿Eliminar este ítem?")) {
+        items.splice(index, 1);
+        saveItems();
+        showPage("marketplace");
+      }
     }
   </script>
 </body>
