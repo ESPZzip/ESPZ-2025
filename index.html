@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Roblox Revival</title>
+  <title>ESP:Z - Home</title>
   <style>
     body{font-family:Arial;margin:0;background:#f0f0f0;}
     #topbar{background:#222;color:#fff;padding:10px;display:flex;justify-content:space-between;align-items:center;}
@@ -29,10 +29,12 @@
 
   <div id="content">
     <h2>Bienvenido</h2>
-    <input id="regUser" placeholder="Usuario"><br>
-    <input id="regPass" type="password" placeholder="Contraseña"><br>
-    <button onclick="register()">Registrar</button>
-    <button onclick="login()">Login</button>
+    <div id="authBox">
+      <input id="regUser" placeholder="Usuario"><br>
+      <input id="regPass" type="password" placeholder="Contraseña"><br>
+      <button onclick="register()">Registrar</button>
+      <button onclick="login()">Login</button>
+    </div>
   </div>
 
   <!-- 🔹 Admin Panel -->
@@ -73,16 +75,18 @@
 
     let currentUser=null;
 
+    // 🔹 Registro
     async function register(){
       const user=document.getElementById("regUser").value;
       const pass=document.getElementById("regPass").value;
       if(!user||!pass)return alert("Completa todo");
       const snap=await db.collection("users").doc(user).get();
       if(snap.exists) return alert("Usuario ya existe");
-      await db.collection("users").doc(user).set({username:user,password:pass,robux:100});
-      alert("Registrado");
+      await db.collection("users").doc(user).set({username:user,password:pass,robux:100,friends:[],requests:[]});
+      alert("Registrado, ahora inicia sesión");
     }
 
+    // 🔹 Login
     async function login(){
       const user=document.getElementById("regUser").value;
       const pass=document.getElementById("regPass").value;
@@ -94,8 +98,10 @@
       startApp();
     }
 
+    // 🔹 Iniciar app
     async function startApp(){
       document.getElementById("robuxDisplay").style.display="block";
+      document.getElementById("authBox").style.display="none";
       loadMarket();
       updateRobux();
 
@@ -107,11 +113,13 @@
       extra.innerHTML+=`<button onclick="logout()">Cerrar Sesión</button>`;
     }
 
+    // 🔹 Robux
     async function updateRobux(){
       const snap=await db.collection("users").doc(currentUser).get();
       document.getElementById("robux").innerText=snap.data().robux;
     }
 
+    // 🔹 Marketplace
     async function loadMarket(){
       const snap=await db.collection("items").get();
       const cont=document.getElementById("content");
@@ -145,6 +153,7 @@
       updateRobux(); loadMarket();
     }
 
+    // 🔹 Perfil
     async function loadProfile(){
       const cont=document.getElementById("content");
       cont.innerHTML="<h2>Perfil</h2><div id='inv'></div>";
@@ -164,45 +173,82 @@
       });
     }
 
-    async function viewFriendInventory(user){
-      const content=document.getElementById("content");
-      const snap=await db.collection("users").doc(user).get();
-      if(!snap.exists){content.innerHTML="<p>No encontrado</p>";return;}
-      const data=snap.data();
-      let html=`<h2>Inventario de ${data.username}</h2>`;
-      html+=`<p>Robux: 💰 ${data.robux}</p>`;
-      html+=`<h3>Items:</h3><div id='friendInventory'></div>`;
-      content.innerHTML=html;
-      const invSnap=await db.collection("users").doc(user).collection("inventory").get();
-      const invDiv=document.getElementById("friendInventory");
-      if(invSnap.empty) invDiv.innerHTML="<p>No tiene items.</p>";
-      else invSnap.forEach(doc=>{
-        const item=doc.data();
-        invDiv.innerHTML+=`
-          <div class="item">
-            ${item.tag?`<div class="tag" style="color:${item.tag.color};background:${item.tag.bg};">${item.tag.text}</div>`:""}
-            <img src="${item.img}" width="80"><br>
-            <b>${item.name}</b><br>
-            ⭐ ${item.value}<br>
-            📌 Subido por: <b>${item.addedBy||"Desconocido"}</b>
-          </div>`;
-      });
-    }
-
+    // 🔹 Friends
     async function loadFriends(){
-      document.getElementById("content").innerHTML="<h2>Friends (pendiente)</h2>";
+      const snap=await db.collection("users").doc(currentUser).get();
+      const data=snap.data();
+      let html="<h2>Friends</h2>";
+      html+=`<input id="searchFriend" placeholder="Buscar usuario"><button onclick="searchFriend()">Buscar</button><br><br>`;
+      html+="<h3>Solicitudes</h3>";
+      if(data.requests.length===0) html+="<p>Sin solicitudes</p>";
+      else data.requests.forEach(r=>{
+        html+=`${r} <button onclick="acceptFriend('${r}')">Aceptar</button><br>`;
+      });
+      html+="<h3>Tus amigos</h3>";
+      if(data.friends.length===0) html+="<p>No tienes amigos</p>";
+      else data.friends.forEach(f=>{
+        html+=`${f} <button onclick="viewFriendInventory('${f}')">Ver inventario</button><br>`;
+      });
+      document.getElementById("content").innerHTML=html;
     }
 
-    async function loadGiveaways(){
-      document.getElementById("content").innerHTML="<h2>Giveaways</h2><p>Aquí el admin puede dar robux.</p>";
+    async function searchFriend(){
+      const name=document.getElementById("searchFriend").value;
+      if(!name) return;
+      const snap=await db.collection("users").doc(name).get();
+      if(!snap.exists) return alert("No encontrado");
+      document.getElementById("content").innerHTML+=`<p>${name} <button onclick="addFriend('${name}')">Añadir</button></p>`;
     }
 
+    async function addFriend(name){
+      if(name===currentUser)return;
+      const uref=db.collection("users").doc(name);
+      const usnap=await uref.get();
+      if(!usnap.exists)return alert("No existe");
+      await uref.update({requests:firebase.firestore.FieldValue.arrayUnion(currentUser)});
+      alert("Solicitud enviada");
+    }
+
+    async function acceptFriend(name){
+      const uref=db.collection("users").doc(currentUser);
+      await uref.update({
+        requests:firebase.firestore.FieldValue.arrayRemove(name),
+        friends:firebase.firestore.FieldValue.arrayUnion(name)
+      });
+      await db.collection("users").doc(name).update({
+        friends:firebase.firestore.FieldValue.arrayUnion(currentUser)
+      });
+      loadFriends();
+    }
+
+    // 🔹 Giveaways (solo admin)
+    function loadGiveaways(){
+      document.getElementById("content").innerHTML=`
+        <h2>Giveaways</h2>
+        <input id="giveUser" placeholder="Usuario destino"><br>
+        <input id="giveAmount" placeholder="Cantidad de Robux"><br>
+        <button onclick="sendGiveaway()">Enviar</button>
+      `;
+    }
+
+    async function sendGiveaway(){
+      const user=document.getElementById("giveUser").value;
+      const amount=parseInt(document.getElementById("giveAmount").value);
+      if(!user||!amount) return;
+      const snap=await db.collection("users").doc(user).get();
+      if(!snap.exists)return alert("No existe ese usuario");
+      await db.collection("users").doc(user).update({robux:snap.data().robux+amount});
+      alert("Enviado!");
+    }
+
+    // 🔹 Logout
     function logout(){
       currentUser=null;
       localStorage.removeItem("currentUser");
       location.reload();
     }
 
+    // 🔹 Admin Panel funciones
     async function addItem(){
       const name=document.getElementById("itemName").value;
       const img=document.getElementById("itemImg").value;
@@ -255,6 +301,7 @@
       }
     });
 
+    // 🔹 Mantener login al refrescar
     window.onload=function(){
       const u=localStorage.getItem("currentUser");
       if(u){currentUser=u;startApp();}
