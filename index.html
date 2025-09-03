@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Roblox Revival Prototype</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #1e1e2f;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .card {
+      background: #2c2c40;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
+      text-align: center;
+      width: 300px;
+    }
+    input {
+      display: block;
+      margin: 10px auto;
+      padding: 10px;
+      width: 80%;
+      border: none;
+      border-radius: 6px;
+    }
+    button {
+      background: #3a86ff;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    button:hover { background: #265dcc; }
+    #menu, #adminPanel { display: none; }
+    .menu-btn {
+      display: block;
+      background: #4cc9f0;
+      margin: 10px auto;
+      width: 200px;
+    }
+    #adminPanel {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #111;
+      padding: 20px;
+      border: 2px solid #fff;
+      border-radius: 10px;
+      z-index: 999;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Registro/Login -->
+  <div id="auth" class="card">
+    <h2>Registro / Login</h2>
+    <input type="text" id="username" placeholder="Usuario">
+    <input type="password" id="password" placeholder="Contraseña">
+    <button onclick="register()">Registrarse</button>
+    <button onclick="login()">Iniciar Sesión</button>
+    <p id="authMsg"></p>
+  </div>
+
+  <!-- Menú principal -->
+  <div id="menu" class="card">
+    <h2>Bienvenido <span id="displayUser"></span></h2>
+    <button class="menu-btn">Marketplace</button>
+    <button class="menu-btn">Profile</button>
+    <button class="menu-btn">Friends</button>
+  </div>
+
+  <!-- Panel Admin Secreto -->
+  <div id="adminPanel">
+    <h2>Panel Admin</h2>
+    <p>Solo acceso autorizado.</p>
+    <button onclick="closeAdmin()">Cerrar</button>
+  </div>
+
+  <script>
+    let storedUser = null;
+    let storedPass = null;
+
+    function register() {
+      const user = document.getElementById("username").value;
+      const pass = document.getElementById("password").value;
+      if (!user || !pass) {
+        document.getElementById("authMsg").innerText = "Completa todos los campos.";
+        return;
+      }
+      storedUser = user;
+      storedPass = pass;
+      document.getElementById("authMsg").innerText = "Registro exitoso. Ahora inicia sesión.";
+    }
+
+    function login() {
+      const user = document.getElementById("username").value;
+      const pass = document.getElementById("password").value;
+      if (user === storedUser && pass === storedPass) {
+        document.getElementById("auth").style.display = "none";
+        document.getElementById("menu").style.display = "block";
+        document.getElementById("displayUser").innerText = storedUser;
+      } else {
+        document.getElementById("authMsg").innerText = "Usuario o contraseña incorrectos.";
+      }
+    }
+
+    // Detectar tecla Insert
+    document.addEventListener("keydown", function(e) {
+      if (e.key === "Insert") {
+        const inputPass = prompt("Introduce la contraseña de admin:");
+        if (inputPass === "crackythebest") {
+          document.getElementById("adminPanel").style.display = "block";
+        } else {
+          alert("Contraseña incorrecta.");
+        }
+      }
+    });
+
+    function closeAdmin() {
+      document.getElementById("adminPanel").style.display = "none";
+    }
+  </script>
+</body>
+</html>
