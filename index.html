@@ -20,7 +20,7 @@
       border-radius: 12px;
       box-shadow: 0 0 20px rgba(0,0,0,0.5);
       text-align: center;
-      width: 300px;
+      width: 340px;
     }
     input {
       display: block;
@@ -40,7 +40,7 @@
       margin-top: 10px;
     }
     button:hover { background: #265dcc; }
-    #menu, #adminPanel { display: none; }
+    #menu, #adminPanel, #marketplace { display: none; }
     .menu-btn {
       display: block;
       background: #4cc9f0;
@@ -57,6 +57,27 @@
       border: 2px solid #fff;
       border-radius: 10px;
       z-index: 999;
+      width: 350px;
+    }
+    .item {
+      background: #3a3a55;
+      padding: 10px;
+      border-radius: 10px;
+      margin: 10px;
+      text-align: center;
+    }
+    .item img {
+      width: 100px;
+      height: 100px;
+      object-fit: cover;
+      border-radius: 8px;
+    }
+    .delete-btn {
+      background: #ff4d4d;
+      margin-top: 8px;
+    }
+    .delete-btn:hover {
+      background: #cc0000;
     }
   </style>
 </head>
@@ -75,21 +96,46 @@
   <!-- Menú principal -->
   <div id="menu" class="card">
     <h2>Bienvenido <span id="displayUser"></span></h2>
-    <button class="menu-btn">Marketplace</button>
+    <button class="menu-btn" onclick="openMarketplace()">Marketplace</button>
     <button class="menu-btn">Profile</button>
     <button class="menu-btn">Friends</button>
+  </div>
+
+  <!-- Marketplace -->
+  <div id="marketplace" class="card">
+    <h2>Marketplace</h2>
+    <div id="itemsList"></div>
+    <button onclick="closeMarketplace()">Volver</button>
   </div>
 
   <!-- Panel Admin Secreto -->
   <div id="adminPanel">
     <h2>Panel Admin</h2>
-    <p>Solo acceso autorizado.</p>
+    <p>Agregar ítem al Marketplace:</p>
+    <input type="text" id="itemName" placeholder="Nombre del ítem">
+    <input type="text" id="itemImg" placeholder="URL de imagen">
+    <input type="number" id="itemPrice" placeholder="Precio">
+    <input type="number" id="itemValue" placeholder="Valor">
+    <button onclick="addItem()">Agregar Ítem</button>
     <button onclick="closeAdmin()">Cerrar</button>
   </div>
 
   <script>
     let storedUser = null;
     let storedPass = null;
+    let items = [];
+
+    // Cargar ítems de localStorage al iniciar
+    window.onload = function() {
+      const savedItems = localStorage.getItem("marketItems");
+      if (savedItems) {
+        items = JSON.parse(savedItems);
+      }
+    }
+
+    function saveItems() {
+      localStorage.setItem("marketItems", JSON.stringify(items));
+    }
 
     function register() {
       const user = document.getElementById("username").value;
@@ -115,7 +161,7 @@
       }
     }
 
-    // Detectar tecla Insert
+    // Detectar tecla Insert para abrir admin
     document.addEventListener("keydown", function(e) {
       if (e.key === "Insert") {
         const inputPass = prompt("Introduce la contraseña de admin:");
@@ -129,6 +175,69 @@
 
     function closeAdmin() {
       document.getElementById("adminPanel").style.display = "none";
+    }
+
+    // Marketplace
+    function openMarketplace() {
+      document.getElementById("menu").style.display = "none";
+      document.getElementById("marketplace").style.display = "block";
+      renderItems();
+    }
+    function closeMarketplace() {
+      document.getElementById("marketplace").style.display = "none";
+      document.getElementById("menu").style.display = "block";
+    }
+
+    function addItem() {
+      const name = document.getElementById("itemName").value;
+      const img = document.getElementById("itemImg").value;
+      const price = document.getElementById("itemPrice").value;
+      const value = document.getElementById("itemValue").value;
+
+      if (!name || !img || !price || !value) {
+        alert("Completa todos los campos.");
+        return;
+      }
+
+      items.push({ name, img, price, value });
+      saveItems(); // guardar en localStorage
+
+      // limpiar inputs
+      document.getElementById("itemName").value = "";
+      document.getElementById("itemImg").value = "";
+      document.getElementById("itemPrice").value = "";
+      document.getElementById("itemValue").value = "";
+
+      alert("Ítem agregado al Marketplace.");
+    }
+
+    function deleteItem(index) {
+      if (confirm("¿Seguro que quieres eliminar este ítem?")) {
+        items.splice(index, 1);
+        saveItems();
+        renderItems();
+      }
+    }
+
+    function renderItems() {
+      const container = document.getElementById("itemsList");
+      container.innerHTML = "";
+      if (items.length === 0) {
+        container.innerHTML = "<p>No hay ítems aún.</p>";
+        return;
+      }
+      items.forEach((item, index) => {
+        const div = document.createElement("div");
+        div.className = "item";
+        div.innerHTML = `
+          <img src="${item.img}" alt="${item.name}">
+          <h3>${item.name}</h3>
+          <p>💰 Precio: ${item.price}</p>
+          <p>⭐ Valor: ${item.value}</p>
+          <button class="delete-btn" onclick="deleteItem(${index})">Eliminar</button>
+        `;
+        container.appendChild(div);
+      });
     }
   </script>
 </body>
